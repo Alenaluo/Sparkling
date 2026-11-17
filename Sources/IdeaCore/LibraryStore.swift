@@ -205,7 +205,7 @@ public final class LibraryStore: @unchecked Sendable {
 
     /// 保存一条灵感。repo 为 nil 或收件箱时写入 Inbox/。
     @discardableResult
-    public func saveIdea(_ text: String, to repo: Repo?, date: Date = Date()) throws -> Idea {
+    public func saveIdea(_ text: String, to repo: Repo?, date: Date = Date(), nameHint: String? = nil) throws -> Idea {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let folder = (repo?.isInbox ?? true) ? Self.inboxFolder : repo!.folder
         let dir = folderURL(folder)
@@ -214,7 +214,7 @@ public final class LibraryStore: @unchecked Sendable {
         } catch {
             throw LibraryError.notWritable("Sparkling 文件夹不可写")
         }
-        let url = FileNamer.uniqueURL(in: dir, base: FileNamer.baseName(for: body, date: date))
+        let url = FileNamer.uniqueURL(in: dir, base: FileNamer.baseName(for: nameHint ?? body, date: date))
         var fmv = Frontmatter()
         fmv["id"] = ULID.make(date: date)
         fmv["created"] = ISODate.string(date)
@@ -224,6 +224,21 @@ public final class LibraryStore: @unchecked Sendable {
             throw LibraryError.notWritable("\(folder == Self.inboxFolder ? "未归类" : folder) 文件夹不可写")
         }
         return readIdea(url: url, folder: folder)!
+    }
+
+    /// 把图片拷进项目的 `assets/`（v2 剪贴板转灵感，D23②）。返回 .md 里引用用的相对路径 `assets/<名>.png`。
+    public func copyAsset(from src: URL, to repo: Repo?, baseName: String, date: Date = Date()) throws -> String {
+        let folder = (repo?.isInbox ?? true) ? Self.inboxFolder : repo!.folder
+        let dir = folderURL(folder).appendingPathComponent("assets", isDirectory: true)
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            let ext = src.pathExtension.isEmpty ? "png" : src.pathExtension
+            let dst = FileNamer.uniqueURL(in: dir, base: FileNamer.baseName(for: baseName, date: date).replacingOccurrences(of: " ", with: "-"), ext: ext)
+            try fm.copyItem(at: src, to: dst)
+            return "assets/" + dst.lastPathComponent
+        } catch {
+            throw LibraryError.notWritable("\(folder == Self.inboxFolder ? "未归类" : folder) 文件夹不可写")
+        }
     }
 
     /// 改正文。写回前比对修改时间，外部改过且未 force 时抛 modifiedExternally。文件名不变。
