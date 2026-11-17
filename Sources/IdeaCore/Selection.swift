@@ -243,3 +243,25 @@ public enum EditExitPolicy {
         edited != onDisk && !edited.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
+
+// MARK: - 双击改名（product D19）
+
+public enum RenameDecision: Equatable {
+    case unchanged
+    /// 不生效、恢复原名，附轻提示
+    case rejected(String)
+    case rename(String)
+}
+
+public enum RenamePolicy {
+    public static func decide(_ input: String, repo: Repo, others: [Repo]) -> RenameDecision {
+        let name = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name == repo.folder { return .unchanged }
+        if name.isEmpty { return .rejected("名称不能为空，已恢复原名") }
+        if let other = others.first(where: { $0.id != repo.id && $0.folder.compare(name, options: .caseInsensitive) == .orderedSame }) {
+            return .rejected("已有项目「\(other.folder)」，已恢复原名")
+        }
+        if let p = FileNamer.repoNameProblem(name) { return .rejected("\(p)，已恢复原名") }
+        return .rename(name)
+    }
+}

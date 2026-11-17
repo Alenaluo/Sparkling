@@ -123,7 +123,10 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
             onTag: { [weak self] r in self?.toggleTag(r.id) },
             onOverflow: { [weak self] in self?.insertAt() },
             onOpenLibrary: { [weak self] in self?.hide(); self?.openLibrary() },
-            onOpenSettings: { [weak self] in self?.hide(); self?.openSettings() }))
+            onOpenSettings: { [weak self] in self?.hide(); self?.openSettings() },
+            onAdd: { [weak self] in self?.startCreate() },
+            onCreate: { [weak self] in self?.commitCreate() },
+            onCancelCreate: { [weak self] in self?.cancelCreate() }))
         // 保留默认 sizingOptions：关掉后 fittingSize 为 0，面板会变成 0×0 看不见
         panel.contentView = hosting
         panel.delegate = self
@@ -155,6 +158,9 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
             textView.needsDisplay = true
         }
         model.errorMessage = nil
+        model.creatingRepo = false
+        model.newRepoName = ""
+        model.createError = nil
         model.rootMissing = app.loadError != nil
         // 草稿恢复：正文 + 选择；保存成功后为空、未选
         let restored = !draftText.isEmpty
@@ -266,6 +272,8 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
 
     func handleKeyEquivalent(_ e: NSEvent) -> Bool {
         guard e.type == .keyDown else { return false }
+        // 新建项目输入中：快捷键交给输入框（拷贝粘贴等走编辑菜单）
+        if model.creatingRepo { return false }
         let flags = e.modifierFlags.intersection([.command, .shift, .option, .control])
         guard flags.contains(.command) else { return false }
         // 组字中一律放行给输入法
@@ -283,6 +291,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
                 model.draftRestored = false
                 return true
             case "o": hide(); openLibrary(); return true
+            case "n": startCreate(); return true
             case ",": hide(); openSettings(); return true
             case "a": textView.selectAll(nil); return true
             case "c": textView.copy(nil); return true
@@ -403,6 +412,81 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
         model.selection.selected = repo.id
         closePopup()
         updateHeight()
+    }
+
+    // MARK: 面板里新建项目（D20）
+
+    /// 进入新建时记下的正文光标与 @ 提及（从「没有叫 xx 的项目」按 ⌘N 时预填 xx，创建后删掉 @xx）
+    var createReturnRange = NSRange(location: 0, length: 0)
+    var createMention: Mention?
+
+    func startCreate() {
+        guard !model.creatingRepo else { return }
+        createReturnRange = textView.selectedRange()
+        createMention = nil
+        var prefill = ""
+        if model.popupOpen, model.popupItems.isEmpty,
+           let m = MentionParser.active(in: textView.string, cursor: createReturnRange.location) {
+            prefill = m.query
+            createMention = m
+        }
+        closePopup()
+        model.newRepoName = prefill
+        model.createError = nil
+        model.creatingRepo = true
+        relayout()
+    }
+
+    func cancelCreate() {
+        endCreate()
+        log.info("create repo cancelled")
+    }
+
+    /// ⏎：空名 = 取消；重名 = 选中已有项目并高亮；否则创建并选中
+    func commitCreate() {
+        let name = model.newRepoName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { cancelCreate(); return }
+        if let existing = model.repos.first(where: { $0.folder.compare(name, options: .caseInsensitive) == .orderedSame }) {
+            model.selection.selected = existing.id
+            flash(existing.id)
+            endCreate(selected: true)
+            log.info("create repo: exists, selected \(existing.folder, privacy: .public)")
+            return
+        }
+        do {
+            let repo = try app.store.createRepo(name: name, in: app.library)
+            app.reload()
+            model.repos = app.repos
+            model.selection.selected = repo.id
+            endCreate(selected: true)
+            log.info("create repo \(repo.folder, privacy: .public)")
+        } catch {
+            model.createError = error.localizedDescription
+        }
+    }
+
+    func endCreate(selected: Bool = false) {
+        model.creatingRepo = false
+        model.newRepoName = ""
+        model.createError = nil
+        panel.makeFirstResponder(textView)
+        if selected, let m = createMention, MentionParser.active(in: textView.string, cursor: m.range.location + m.range.length) == m {
+            apply(mention: m, repo: model.selectedRepo!)
+        } else if selected {
+            // 光标回到正文末尾，再按 ⏎ 即保存
+            textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+        } else {
+            textView.setSelectedRange(createReturnRange)
+        }
+        createMention = nil
+        relayout()
+    }
+
+    func flash(_ id: String) {
+        model.flashID = id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            MainActor.assumeIsolated { if self?.model.flashID == id { self?.model.flashID = nil } }
+        }
     }
 
     // MARK: 保存

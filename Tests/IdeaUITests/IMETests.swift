@@ -139,6 +139,67 @@ import Testing
         #expect(abs(capture.panel.frame.maxY - top) < 1)
     }
 
+    // MARK: D20 面板里新建项目（验收 #19 #20）
+
+    func cmd(_ ch: String, _ code: UInt16) -> NSEvent {
+        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0, windowNumber: 0, context: nil,
+                         characters: ch, charactersIgnoringModifiers: ch, isARepeat: false, keyCode: code)!
+    }
+
+    @Test func createRepoFromPanelAndSave() throws {
+        tv.insertText("新项目里的第一条", replacementRange: NSRange(location: NSNotFound, length: 0))
+        #expect(capture.handleKeyEquivalent(cmd("n", 45)))   // ⌘N
+        #expect(capture.model.creatingRepo)
+        #expect(capture.model.layout.rows.flatMap { $0 }.last == .trailing)
+        capture.model.newRepoName = "增长实验"
+        capture.commitCreate()
+        #expect(!capture.model.creatingRepo)
+        #expect(capture.model.selectedRepo?.folder == "增长实验")
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("增长实验/_repo.md").path))
+        #expect(tv.selectedRange().location == (tv.string as NSString).length) // 光标回正文末尾
+        #expect(command(#selector(NSResponder.insertNewline(_:))))           // 再 ⏎ 保存
+        let files = try FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent("增长实验").path).filter { $0 != "_repo.md" }
+        #expect(files.count == 1)
+        #expect(app.repos.contains { $0.folder == "增长实验" })              // 主窗口侧栏的数据源
+    }
+
+    @Test func cancelCreateKeepsTextAndSelection() {
+        tv.insertText("原正文", replacementRange: NSRange(location: NSNotFound, length: 0))
+        capture.model.selection.selected = app.repos[1].id
+        capture.startCreate()
+        capture.model.newRepoName = "不要建"
+        capture.cancelCreate()
+        #expect(!capture.model.creatingRepo)
+        #expect(tv.string == "原正文")
+        #expect(capture.model.selectedRepo?.folder == "数据看板")
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("不要建").path))
+    }
+
+    @Test func duplicateNameSelectsExisting() throws {
+        let before = try FileManager.default.contentsOfDirectory(atPath: root.path).count
+        capture.startCreate()
+        capture.model.newRepoName = "数据看板"
+        capture.commitCreate()
+        #expect(capture.model.selectedRepo?.folder == "数据看板")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: root.path).count == before)
+        // 空名 ⏎ = 取消
+        capture.startCreate()
+        capture.model.newRepoName = "  "
+        capture.commitCreate()
+        #expect(!capture.model.creatingRepo)
+    }
+
+    @Test func createFromNoMatchMentionPrefillsAndRemovesMention() {
+        tv.insertText("夜读想法 @yedu", replacementRange: NSRange(location: NSNotFound, length: 0))
+        #expect(capture.model.popupOpen && capture.model.popupItems.isEmpty)
+        capture.startCreate()
+        #expect(capture.model.newRepoName == "yedu")
+        capture.model.newRepoName = "夜读"
+        capture.commitCreate()
+        #expect(capture.model.selectedRepo?.folder == "夜读")
+        #expect(tv.string == "夜读想法")
+    }
+
     @Test func emptySubmitDoesNotSave() {
         tv.insertText("   ", replacementRange: NSRange(location: NSNotFound, length: 0))
         command(#selector(NSResponder.insertNewline(_:)))

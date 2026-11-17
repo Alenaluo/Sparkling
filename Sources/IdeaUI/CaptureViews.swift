@@ -26,19 +26,35 @@ final class CaptureModel {
     var selectedRepo: Repo? { selection.selected.flatMap { id in repos.first { $0.id == id } } }
     var targetName: String { selectedRepo?.displayName ?? "未归类" }
 
-    /// tag 布局结果
-    var layout: TagLayout { TagLayout.compute(repos: repos) }
+    /// D20 面板里新建项目
+    var creatingRepo = false
+    var newRepoName = ""
+    var createError: String?
+    /// 重名时高亮已有 tag（150ms）
+    var flashID: String?
+
+    /// tag 布局结果（正常态可见的项目数在输入态保持不变，避免 tag 跳动）
+    var layout: TagLayout {
+        let normal = TagLayout.compute(repos: repos, trailing: TagLayout.addWidth)
+        guard creatingRepo else { return normal }
+        return TagLayout.compute(repos: repos, trailing: TagLayout.inputWidth(newRepoName), maxRows: 4, shown: normal.shownCount)
+    }
     var visibleIDs: [String] { layout.rows.flatMap { $0 }.compactMap { if case let .repo(r, _) = $0 { return r.id }; return nil } }
+    /// 下一个自动分配的颜色序号（输入胶囊左侧预览）
+    var nextColorIndex: Int { repos.count % LibraryStore.paletteCount }
 }
 
-// MARK: - tag 布局（最多两行，溢出时最后一个位置变成「+N · @ 搜索」）
+// MARK: - tag 布局（最多 3 行；溢出时「+N · @ 搜索」；末尾常驻「＋ ⌘N」或新建输入胶囊）
 
-struct TagLayout {
+struct TagLayout: Equatable {
     enum Item: Hashable {
         case repo(Repo, index: Int)
         case overflow(Int)
+        /// 末尾：正常态是「＋ ⌘N」，输入态是新建输入胶囊
+        case trailing
     }
     var rows: [[Item]]
+    var shownCount: Int { rows.flatMap { $0 }.filter { if case .repo = $0 { return true }; return false }.count }
 
     /// design v1.0 §2.1：卡片 440 × 380（最小），最高 560
     static let panelWidth: CGFloat = 440
@@ -63,38 +79,48 @@ struct TagLayout {
         20 + ceil(("+\(n) · @ 搜索" as NSString).size(withAttributes: [.font: nameFont]).width)
     }
 
-    static func compute(repos: [Repo], maxRows: Int = 3) -> TagLayout {
+    /// 「＋ ⌘N」胶囊宽度
+    static var addWidth: CGFloat {
+        let plus = ceil(("＋" as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 15, weight: .regular)]).width)
+        let cmd = ceil(("⌘N" as NSString).size(withAttributes: [.font: cmdFont]).width)
+        return 10 + plus + 5 + cmd + 10
+    }
+
+    /// 输入胶囊：最小 128，随文字变宽，最宽 260
+    static func inputWidth(_ text: String) -> CGFloat {
+        let t = text.isEmpty ? "新项目名" : text
+        let w = ceil((t as NSString).size(withAttributes: [.font: nameFont]).width)
+        return min(260, max(128, 10 + 8 + 6 + w + 14))
+    }
+
+    /// 前 k 个项目 +（溢出胶囊）+ 末尾元素能否排进 maxRows 行
+    static func flow(_ widths: [(Item, CGFloat)], maxRows: Int) -> [[Item]]? {
         var rows: [[Item]] = [[]]
         var x: CGFloat = 0
-        for (i, repo) in repos.enumerated() {
-            let w = width(of: repo, index: i)
+        for (item, w) in widths {
             if x > 0 && x + gap + w > available {
-                if rows.count == maxRows {
-                    // 放不下：腾出位置给溢出胶囊
-                    let remaining = repos.count - i
-                    var last = rows[rows.count - 1]
-                    var lastX = last.reduce(CGFloat(0)) { acc, item in
-                        if case let .repo(r, idx) = item { return acc + (acc > 0 ? gap : 0) + width(of: r, index: idx) }
-                        return acc
-                    }
-                    var hidden = remaining
-                    while !last.isEmpty && lastX + gap + overflowWidth(hidden) > available {
-                        if case let .repo(r, idx) = last.removeLast() {
-                            lastX -= width(of: r, index: idx) + (last.isEmpty ? 0 : gap)
-                            hidden += 1
-                        }
-                    }
-                    last.append(.overflow(hidden))
-                    rows[rows.count - 1] = last
-                    return TagLayout(rows: rows)
-                }
-                rows.append([])
-                x = 0
+                if rows.count == maxRows { return nil }
+                rows.append([]); x = 0
             }
-            rows[rows.count - 1].append(.repo(repo, index: i))
+            rows[rows.count - 1].append(item)
             x += (x > 0 ? gap : 0) + w
         }
-        return TagLayout(rows: rows)
+        return rows
+    }
+
+    /// shown 给定时固定显示前 shown 个项目（输入态保持 tag 不跳动）
+    static func compute(repos: [Repo], trailing: CGFloat = 0, maxRows: Int = 3, shown: Int? = nil) -> TagLayout {
+        func items(_ k: Int) -> [(Item, CGFloat)] {
+            var list = repos.prefix(k).enumerated().map { (Item.repo($0.element, index: $0.offset), width(of: $0.element, index: $0.offset)) }
+            if k < repos.count { list.append((.overflow(repos.count - k), overflowWidth(repos.count - k))) }
+            if trailing > 0 { list.append((.trailing, trailing)) }
+            return list
+        }
+        if let shown, let rows = flow(items(min(shown, repos.count)), maxRows: maxRows) { return TagLayout(rows: rows) }
+        for k in stride(from: repos.count, through: 0, by: -1) {
+            if let rows = flow(items(k), maxRows: maxRows) { return TagLayout(rows: rows) }
+        }
+        return TagLayout(rows: [items(0).map(\.0)])
     }
 }
 
@@ -107,6 +133,11 @@ struct CapturePanelView: View {
     var onOverflow: () -> Void
     var onOpenLibrary: () -> Void
     var onOpenSettings: () -> Void
+    /// D20：点「＋」/ ⏎ 创建 / Esc 取消
+    var onAdd: () -> Void = {}
+    var onCreate: () -> Void = {}
+    var onCancelCreate: () -> Void = {}
+    @FocusState private var newNameFocused: Bool
 
     /// 书写区里文字最多能占的高度：卡片最高 560 减去内边距、底栏、草稿提示
     var maxTextHeight: CGFloat {
@@ -146,6 +177,9 @@ struct CapturePanelView: View {
             if abs(model.footerHeight - h) > 0.5 { model.footerHeight = h }
         }
         .id(model.palette)
+        .onChange(of: model.creatingRepo) { _, on in
+            if on { DispatchQueue.main.async { newNameFocused = true } }
+        }
     }
 
     @ViewBuilder var footer: some View {
@@ -160,31 +194,41 @@ struct CapturePanelView: View {
             .background(Theme.dangerBg)
         } else {
             VStack(alignment: .leading, spacing: 10) {
-                if model.repos.isEmpty {
+                if model.repos.isEmpty && !model.creatingRepo {
                     Button(action: onOpenLibrary) {
                         Text("还没有项目，全部装进未归类 · 去全部灵感里建一个")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.textSecondary)
                     }
                     .buttonStyle(.plain)
-                } else {
-                    VStack(alignment: .leading, spacing: TagLayout.gap) {
-                        ForEach(Array(model.layout.rows.enumerated()), id: \.offset) { _, row in
-                            HStack(spacing: TagLayout.gap) {
-                                ForEach(row, id: \.self) { item in tagView(item) }
-                            }
+                }
+                VStack(alignment: .leading, spacing: TagLayout.gap) {
+                    ForEach(Array(model.layout.rows.enumerated()), id: \.offset) { _, row in
+                        HStack(spacing: TagLayout.gap) {
+                            ForEach(row, id: \.self) { item in tagView(item) }
                         }
                     }
                 }
                 HStack(spacing: 0) {
-                    destination
-                    Spacer(minLength: 8)
-                    Text("⏎ 保存")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.primaryFg)
-                        .padding(.horizontal, 8).frame(height: 22)
-                        .background(Theme.primary, in: RoundedRectangle(cornerRadius: 6))
+                    if model.creatingRepo {
+                        // 输入态：底行换成键位提示
+                        if let err = model.createError {
+                            Text(err).foregroundStyle(Theme.danger)
+                        } else {
+                            Text("⏎ 创建并选中 · Esc 取消").foregroundStyle(Theme.textPrimary)
+                        }
+                        Spacer(minLength: 0)
+                    } else {
+                        destination
+                        Spacer(minLength: 8)
+                        Text("⏎ 保存")
+                            .foregroundStyle(Theme.primaryFg)
+                            .padding(.horizontal, 8).frame(height: 22)
+                            .background(Theme.primary, in: RoundedRectangle(cornerRadius: 6))
+                    }
                 }
+                .font(.system(size: 11, weight: .semibold))
+                .frame(minHeight: 22)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20).padding(.vertical, 12)
@@ -231,8 +275,9 @@ struct CapturePanelView: View {
                 .frame(height: 26)
                 .frame(maxWidth: TagLayout.maxTagWidth)
                 .background(isOn ? Theme.repoTint(repo) : Theme.tagCanvas, in: Capsule())
-                .scaleEffect(isOn ? 1 : 1)
+                .overlay(Capsule().stroke(model.flashID == repo.id ? Theme.accent : .clear, lineWidth: 2))
                 .animation(.easeInOut(duration: 0.12), value: isOn)
+                .animation(.easeInOut(duration: 0.15), value: model.flashID)
             }
             .buttonStyle(.plain)
         case let .overflow(n):
@@ -244,7 +289,44 @@ struct CapturePanelView: View {
                     .background(Theme.tagCanvas, in: Capsule())
             }
             .buttonStyle(.plain)
+        case .trailing:
+            if model.creatingRepo { newRepoInput } else { addChip }
         }
+    }
+
+    /// 「＋ ⌘N」：无底色、1pt line.soft 内描边、次要色字
+    var addChip: some View {
+        Button(action: onAdd) {
+            HStack(spacing: 5) {
+                Text("＋").font(.system(size: 15))
+                Text("⌘N").font(.system(size: 11, weight: .semibold).monospacedDigit())
+            }
+            .foregroundStyle(Theme.textSecondary)
+            .padding(.horizontal, 10).frame(height: 26)
+            .overlay(Capsule().strokeBorder(Theme.lineSoft, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("新建项目 ⌘N")
+    }
+
+    /// 新建输入胶囊：白底、2pt accent 圈、左侧预览下一个自动分配的颜色
+    var newRepoInput: some View {
+        HStack(spacing: 6) {
+            RepoMarker(repo: Repo(id: "new", folder: "new", shortcode: "", description: "", created: Date(),
+                                  colorIndex: model.nextColorIndex, isInbox: false), size: 9)
+            TextField("新项目名", text: Binding(get: { model.newRepoName }, set: { model.newRepoName = $0; model.createError = nil }))
+                .textFieldStyle(.plain)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .focused($newNameFocused)
+                .onSubmit(onCreate)
+                .onExitCommand(perform: onCancelCreate)
+        }
+        .padding(.horizontal, 10)
+        .frame(width: TagLayout.inputWidth(model.newRepoName), height: 26)
+        .background(Color.white, in: Capsule())
+        .overlay(Capsule().stroke(Theme.accent, lineWidth: 2))
     }
 }
 

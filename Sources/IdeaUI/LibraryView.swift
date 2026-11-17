@@ -40,6 +40,11 @@ struct LibraryView: View {
     @State private var deletingRepo: Repo?
     @State private var repoSheet: RepoSheetMode?
     @State private var errorAlert: String?
+    /// D19 双击改名
+    @State private var renamingID: String?
+    @State private var renameText = ""
+    @State private var renameCancelled = false
+    @FocusState private var renameFocused: Bool
     /// 退出编辑时发现文件被外部改过
     @State private var conflict: (idea: Idea, text: String)?
     @Environment(\.controlActiveState) private var activeState
@@ -101,6 +106,7 @@ struct LibraryView: View {
             }
         }
         .onChange(of: activeState) { _, state in if state != .key { endEditing() } }
+        .onChange(of: renameFocused) { _, focused in if !focused && renamingID != nil { commitRename() } }
         .alert("文件已在别处修改", isPresented: Binding(get: { conflict != nil }, set: { if !$0 { conflict = nil } })) {
             Button("用我的覆盖") {
                 if let c = conflict { do { let u = try app.store.updateIdea(c.idea, body: c.text, force: true); app.replace(c.idea, with: u) } catch { errorAlert = error.localizedDescription } }
@@ -179,10 +185,14 @@ struct LibraryView: View {
         return HStack(alignment: .firstTextBaseline, spacing: 8) {
             RepoMarker(repo: repo, size: 10, onSelectedSidebar: on).frame(width: 12)
                 .alignmentGuide(.firstTextBaseline) { d in d[VerticalAlignment.center] + 4 }
-            // 项目名自动换行，不截断
-            Text(repo.displayName).font(.system(size: 13, weight: .medium)).foregroundStyle(fg)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if renamingID == repo.id {
+                renameField(size: 13, weight: .medium)
+            } else {
+                // 项目名自动换行，不截断
+                Text(repo.displayName).font(.system(size: 13, weight: .medium)).foregroundStyle(fg)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             let n = app.library.count(in: repo)
             if n > 0 || !repo.isInbox {
                 Text("\(n)").font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(on ? fg : Theme.textSecondary)
@@ -193,6 +203,7 @@ struct LibraryView: View {
         .frame(minHeight: 30)
         .background(on ? Theme.sidebarSelected : .clear, in: RoundedRectangle(cornerRadius: 10))
         .contentShape(Rectangle())
+        .onTapGesture(count: 2) { endEditing(); sidebar = item; startRename(repo) }
         .onTapGesture { endEditing(); sidebar = item }
     }
 
@@ -204,9 +215,14 @@ struct LibraryView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(isSearching ? "搜索「\(query)」" : currentRepo.displayName)
-                            .font(.system(size: 22, weight: .bold)).kerning(-0.22).lineSpacing(6)
-                            .foregroundStyle(Theme.textPrimary).lineLimit(1)
+                        if !isSearching && renamingID == currentRepo.id {
+                            renameField(size: 22, weight: .bold)
+                        } else {
+                            Text(isSearching ? "搜索「\(query)」" : currentRepo.displayName)
+                                .font(.system(size: 22, weight: .bold)).kerning(-0.22).lineSpacing(6)
+                                .foregroundStyle(Theme.textPrimary).lineLimit(1)
+                                .onTapGesture(count: 2) { if !isSearching { startRename(currentRepo) } }
+                        }
                         Spacer()
                         Text("\(listedIdeas.count) 条").font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.textSecondary)
                     }
@@ -356,10 +372,61 @@ struct LibraryView: View {
 
     /// 退出编辑态（D17）：卡片收起时自动保存；让输入框交出焦点
     func endEditing() {
+        if renamingID != nil { NSApp.keyWindow?.makeFirstResponder(nil) }
         guard editingID != nil else { return }
         editingID = nil
         NSApp.keyWindow?.makeFirstResponder(nil)
         listFocused = true
+    }
+
+    // MARK: 双击改名（D19）
+
+    /// 原地输入框：尺寸与原文字一致，白底 + 2pt accent 圈，进入时全选原名
+    func renameField(size: CGFloat, weight: Font.Weight) -> some View {
+        TextField("", text: $renameText)
+            .textFieldStyle(.plain)
+            .font(.system(size: size, weight: weight))
+            .foregroundStyle(Theme.textPrimary)
+            .focused($renameFocused)
+            .onSubmit { commitRename() }
+            .onExitCommand { renameCancelled = true; renamingID = nil }
+            .padding(.horizontal, 4)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.accent, lineWidth: 2))
+            .padding(.horizontal, -4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 「未归类」「全部灵感」不可改名
+    func startRename(_ repo: Repo) {
+        guard !repo.isInbox else { return }
+        endEditing()
+        renameText = repo.folder
+        renameCancelled = false
+        renamingID = repo.id
+        DispatchQueue.main.async {
+            renameFocused = true
+            DispatchQueue.main.async { NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil) }
+        }
+    }
+
+    /// ⏎ 或点别处确认；空名 / 重名 / 非法 → 恢复原名并轻提示
+    func commitRename() {
+        guard let id = renamingID, !renameCancelled, let repo = app.library.repo(id: id) else { renamingID = nil; return }
+        renamingID = nil
+        switch RenamePolicy.decide(renameText, repo: repo, others: app.library.repos) {
+        case .unchanged: break
+        case let .rejected(msg): showToast(msg)
+        case let .rename(name):
+            do {
+                let updated = try app.store.updateRepo(repo, name: name, shortcode: repo.shortcode, description: repo.description, in: app.library)
+                app.reload()
+                if sidebar == .repo(id) { sidebar = .repo(updated.id) }
+                log.info("renamed \(repo.folder, privacy: .public) → \(updated.folder, privacy: .public)")
+            } catch {
+                showToast("改名失败：\(error.localizedDescription)，已恢复原名")
+            }
+        }
     }
 
     // MARK: 操作
@@ -455,7 +522,7 @@ struct LibraryView: View {
         }
     }
 
-    var textInputFocused: Bool { editorFocused || searchFocused }
+    var textInputFocused: Bool { editorFocused || searchFocused || renameFocused }
 
     /// 主窗口快捷键（design §6.4）。输入框有焦点时，⌘⌫ / ⌘Z / ⌘C 交还给输入框。
     var shortcuts: some View {

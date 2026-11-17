@@ -328,3 +328,31 @@ func tempRoot() -> URL {
         #expect(FileManager.default.fileExists(atPath: old.path))
     }
 }
+
+@Suite struct RenameTests {
+    func repo(_ id: String, _ name: String) -> Repo { Repo(id: id, folder: name, shortcode: "", description: "", created: Date(), colorIndex: 0, isInbox: false) }
+
+    @Test func decide() {
+        let a = repo("a", "结算重构"), b = repo("b", "增长实验")
+        #expect(RenamePolicy.decide("结算重构", repo: a, others: [a, b]) == .unchanged)
+        #expect(RenamePolicy.decide("  新名字 ", repo: a, others: [a, b]) == .rename("新名字"))
+        #expect(RenamePolicy.decide("   ", repo: a, others: [a, b]) == .rejected("名称不能为空，已恢复原名"))
+        #expect(RenamePolicy.decide("增长实验", repo: a, others: [a, b]) == .rejected("已有项目「增长实验」，已恢复原名"))
+        if case .rejected = RenamePolicy.decide("a/b", repo: a, others: [a, b]) {} else { Issue.record("非法字符应被拒") }
+        if case .rejected = RenamePolicy.decide("未归类", repo: a, others: [a, b]) {} else { Issue.record("保留名应被拒") }
+    }
+
+    /// 改名同步改磁盘文件夹，灵感不丢（验收 #18）
+    @Test func renameKeepsIdeas() throws {
+        let store = LibraryStore(root: tempRoot())
+        var lib = try store.scan()
+        let r = try store.createRepo(name: "旧名", in: lib)
+        try store.saveIdea("一条", to: r)
+        try store.saveIdea("两条", to: r)
+        lib = try store.scan()
+        _ = try store.updateRepo(lib.repo(id: r.id)!, name: "新名", shortcode: r.shortcode, description: "", in: lib)
+        lib = try store.scan()
+        #expect(lib.repo(folder: "旧名") == nil)
+        #expect(lib.count(in: lib.repo(folder: "新名")!) == 2)
+    }
+}
