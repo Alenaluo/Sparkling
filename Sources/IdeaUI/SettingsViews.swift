@@ -374,79 +374,104 @@ struct DangerButton: ButtonStyle {
 
 // MARK: - 首次启动引导
 
+/// 首次启动引导（design v1.5 §5.4 §7.0 §12）：两步 ①灵感存在哪 ②按快捷键试记一条。
+/// 没有「建项目」步、没有「跳过」；按钮只有 下一步 / 上一步 / 开始用；角落只留左下 SINCE 2026；
+/// 步骤号是纯数字；第 1 步右侧是低头小女孩插画（empty-girl.png，高 320，right 150、top 150）。
+enum OnboardingLayout {
+    static let size = NSSize(width: 820, height: 560)
+    static let leftWidth: CGFloat = 470
+}
+
 struct OnboardingView: View {
     @Bindable var settings: SettingsModel
     @Environment(AppModel.self) var app
     var done: () -> Void
-    @State private var names = ["", "", ""]
-    @State private var error: String?
+    @State var page = 1
+
+    var hk: String { settings.hotkey.display }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Text("Sparkling Lab").font(.system(size: 10, weight: .semibold)).kerning(0.8)
+        ZStack(alignment: .topLeading) {
+            if page == 1 {
+                EmptyGirl(height: 320)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.top, 150).padding(.trailing, 150)
+                    .allowsHitTesting(false)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(L("按 \(hk) 随时记下，顺手放进对的项目。", "Press \(hk) to jot anything down — and drop it in the right project."))
+                    .font(.system(size: 26, weight: .bold)).kerning(-0.26)
+                    .foregroundStyle(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 36)
+                if page == 1 { step1 } else { step2 }
+                Spacer(minLength: 0)
+            }
+            .frame(width: OnboardingLayout.leftWidth, alignment: .leading)
+            .padding(.top, 56).padding(.leading, 48)
+
+            VStack {
                 Spacer()
-                Text(L("灵感研究所", "IDEA LAB")).font(.system(size: 10, weight: .semibold)).kerning(0.8)
-            }.foregroundStyle(Theme.textTertiary)
-
-            Text(L("随时记下灵感，顺手放进对的项目", "Jot anything down — and drop it in the right project")).font(.system(size: 26, weight: .bold)).foregroundStyle(Theme.textPrimary)
-
-            step(1, L("灵感存在哪", "Where your ideas live")) {
                 HStack {
-                    Text(app.root.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
-                        .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textPrimary).lineLimit(1)
+                    Text("SINCE 2026").font(.system(size: 10, weight: .semibold)).kerning(0.8).foregroundStyle(Theme.textTertiary)
                     Spacer()
+                    if page == 2 {
+                        Button(L("上一步", "Back")) { page = 1 }.buttonStyle(SecondaryButton())
+                        Button(L("开始用", "Get Started")) { done() }.buttonStyle(PrimaryButton()).keyboardShortcut(.defaultAction)
+                    } else {
+                        Button(L("下一步", "Next")) { page = 2 }.buttonStyle(PrimaryButton()).keyboardShortcut(.defaultAction)
+                    }
+                }
+                .padding(.horizontal, 48).padding(.bottom, 32)
+            }
+        }
+        .frame(width: OnboardingLayout.size.width, height: OnboardingLayout.size.height)
+        .background(Theme.canvas)
+    }
+
+    var step1: some View {
+        step(1, L("灵感存在哪", "Where your ideas live")) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Text(app.root.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                        .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary).lineLimit(1).truncationMode(.middle)
+                        .padding(.horizontal, 10).frame(height: 32)
+                        .background(Theme.block, in: RoundedRectangle(cornerRadius: 10))
                     Button(L("换位置…", "Change…")) {
                         let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false; p.canCreateDirectories = true
                         if p.runModal() == .OK, let u = p.url { try? app.setRoot(u, moveExisting: false) }
                     }.buttonStyle(SecondaryButton())
                 }
-            }
-            step(2, L("建 1–3 个项目（只填名称，可跳过）", "Create 1–3 projects (just a name, optional)")) {
-                VStack(spacing: 6) {
-                    ForEach(0..<3, id: \.self) { i in
-                        TextField(L("项目名称，如「播放器重构」", "Project name, e.g. “Checkout Revamp”"), text: $names[i])
-                            .textFieldStyle(.plain).font(.system(size: 13, weight: .medium))
-                            .padding(.horizontal, 10).frame(height: 32)
-                            .background(Theme.block, in: RoundedRectangle(cornerRadius: 10))
-                    }
-                    if let error { Text(error).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.danger).frame(maxWidth: .infinity, alignment: .leading) }
-                }
-            }
-            step(3, L("按 \(settings.hotkey.display) 试记一条", "Press \(settings.hotkey.display) and jot one down")) {
-                Text(L("在任何 App 里按下快捷键，输入后回车。没选项目就装进未归类。", "Press the shortcut in any app, write a line, hit ⏎. Without a project it goes to Unsorted."))
+                Text(L("每个项目是一个文件夹，每条灵感是一个 Markdown 文件，Obsidian 也能直接打开",
+                       "Each project is a folder and each idea a Markdown file — Obsidian can open them too."))
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
-            }
-            Spacer(minLength: 0)
-            HStack {
-                Text("Since 2026").font(.system(size: 10, weight: .semibold)).kerning(0.8).foregroundStyle(Theme.textTertiary)
-                Spacer()
-                Button(L("跳过", "Skip")) { done() }.buttonStyle(SecondaryButton())
-                Button(L("开始使用", "Get Started")) { finish() }.buttonStyle(PrimaryButton()).keyboardShortcut(.defaultAction)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(28)
-        .frame(width: 560, height: 520)
-        .background(Theme.canvas)
     }
 
+    var step2: some View {
+        step(2, L("按 \(hk) 试记一条", "Press \(hk) and jot one down")) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(L("在任意 App 里按 \(hk)，随手写一句，⏎ 保存。现在就试试——这个窗口会等你。",
+                       "Press \(hk) in any app, write a line, hit ⏎. Try it now — this window will wait."))
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(L("等你按 \(hk)…", "Waiting for \(hk)…"))
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.textTertiary)
+            }
+        }
+    }
+
+    /// 步骤号是纯数字（不加橙色手绘圈）
     func step<C: View>(_ n: Int, _ title: String, @ViewBuilder content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text("\(n)").font(.system(size: 13, weight: .bold).monospacedDigit())
-                    .frame(width: 22, height: 22).background(Theme.primary, in: Circle())
-                Text(title).font(.system(size: 15, weight: .semibold))
-            }.foregroundStyle(Theme.textPrimary)
-            content().padding(.leading, 30)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("\(n)").font(.system(size: 15, weight: .bold).monospacedDigit()).foregroundStyle(Theme.textSecondary)
+                Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+            }
+            content().padding(.leading, 20)
         }
-    }
-
-    func finish() {
-        for n in names.map({ $0.trimmingCharacters(in: .whitespaces) }) where !n.isEmpty {
-            do { try app.store.createRepo(name: n, in: app.library); app.reload() }
-            catch { self.error = Q(n) + L("：", ": ") + error.localizedDescription; return }
-        }
-        done()
     }
 }
 

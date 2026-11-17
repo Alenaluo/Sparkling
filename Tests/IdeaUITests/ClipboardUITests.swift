@@ -345,6 +345,9 @@ import Testing
             NSHostingView(rootView: ClipboardSettingsPage(model: SettingsModel(), clip: clip)),
             NSHostingView(rootView: ThemedRoot(content: SettingsView(model: SettingsModel())).environment(app)),
             NSHostingView(rootView: ThemedRoot(content: LibraryView(openSettings: {})).environment(app).frame(width: 960, height: 620)),
+            // design v1.5：两步引导
+            NSHostingView(rootView: ThemedRoot(content: OnboardingView(settings: SettingsModel(), done: {}, page: 1)).environment(app)),
+            NSHostingView(rootView: ThemedRoot(content: OnboardingView(settings: SettingsModel(), done: {}, page: 2)).environment(app)),
         ]
         for v in views {
             v.frame = NSRect(x: 0, y: 0, width: 960, height: 620)

@@ -227,7 +227,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     }
 
     func showOnboarding() {
-        present("onboarding", title: L("欢迎使用 Sparkling", "Welcome to Sparkling"), size: NSSize(width: 560, height: 520), resizable: false) {
+        present("onboarding", title: L("欢迎使用 Sparkling", "Welcome to Sparkling"), size: OnboardingLayout.size, resizable: false) {
             OnboardingView(settings: settings, done: { [weak self] in
                 UserDefaults.standard.set(true, forKey: "onboarded")
                 self?.windows["onboarding"]?.close()
