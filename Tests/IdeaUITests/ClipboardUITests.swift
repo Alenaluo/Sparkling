@@ -136,3 +136,188 @@ import Testing
         #expect(clip.items.count == 1)
     }
 }
+
+/// 剪贴板面板（§13 V4）与 ⌘S 存成灵感（§13 V5）：在进程内跑真实的 ClipboardController / CaptureController
+@MainActor
+@Suite(.serialized) struct ClipPanelTests {
+    let root: URL
+    let app: AppModel
+    let pb: NSPasteboard
+    let clip: ClipboardModel
+    let panel: ClipboardController
+    let capture: CaptureController
+    let repo: Repo
+
+    init() throws {
+        _ = NSApplication.shared
+        root = FileManager.default.temporaryDirectory.appendingPathComponent("sparkling-clipui-\(UUID().uuidString)")
+        setenv("SPARKLING_ROOT", root.path, 1)
+        app = AppModel()
+        repo = try app.store.createRepo(name: "播放器重构", in: app.library)
+        app.reload()
+        pb = NSPasteboard(name: NSPasteboard.Name("sparkling-test-\(UUID().uuidString)"))
+        clip = ClipboardModel(dir: root.appendingPathComponent(".clipboard"), defaults: UserDefaults(suiteName: "sparkling-test-\(UUID().uuidString)")!, pasteboard: pb)
+        panel = ClipboardController(clip: clip, app: app)
+        capture = CaptureController(app: app)
+        capture.clipboard = clip
+        panel.onSaveAsIdea = { [capture] item in capture.showPrefilled(item) }
+        capture.onClipCancel = { [panel] item in panel.show(selecting: item.id, keepQuery: true) }
+    }
+
+    func add(_ s: String) { pb.clearContents(); pb.setString(s, forType: .string); clip.ingest(frontBundleID: nil) }
+    func type(_ q: String) {
+        panel.filterField.stringValue = q
+        panel.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+    }
+    var repoDir: URL { root.appendingPathComponent(repo.folder) }
+    func mdFiles(_ dir: URL) -> [URL] {
+        ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension == "md" && !$0.lastPathComponent.hasPrefix("_") }
+    }
+
+    @Test func showSelectsFirstAndFocusesFilter() async throws {
+        add("旧的"); add("新的")
+        panel.show()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(panel.isVisible)
+        #expect(panel.selected?.text == "新的")
+        #expect(panel.panel.firstResponder === panel.filterField.currentEditor())
+        #expect(panel.hosting.fittingSize.width >= ClipLayout.panelWidth)
+        #expect(abs(panel.hosting.fittingSize.height - (ClipLayout.panelHeight + 80)) < 1)
+    }
+
+    /// C12：实时筛选；⌘⌫ 删除后不再出现
+    @Test func filterAndDelete() async throws {
+        add("播放器 想法"); add("数据看板"); add("播放器 bug")
+        panel.show()
+        type("播放器")
+        #expect(panel.shown.count == 2)
+        #expect(panel.selected?.text == "播放器 bug")
+        panel.handle("moveDown:")
+        #expect(panel.selected?.text == "播放器 想法")
+        panel.handle("moveDown:") // 到底不越界
+        #expect(panel.selected?.text == "播放器 想法")
+        panel.deleteSelected(animated: false)
+        #expect(panel.shown.map(\.text) == ["播放器 bug"])
+        #expect(panel.selected?.text == "播放器 bug")
+        type("")
+        #expect(clip.items.map(\.text) == ["播放器 bug", "数据看板"])
+        // ⌘⌫ 走 keyEquivalent
+        let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0, windowNumber: 0, context: nil,
+                                 characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: 51)!
+        #expect(panel.handleKeyEquivalent(e))
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(clip.items.count == 1)
+    }
+
+    /// C4：⏎ 把选中条目写回剪贴板并关闭
+    @Test func enterCopiesAndCloses() async throws {
+        add("第一条"); add("第二条")
+        panel.show()
+        panel.handle("moveDown:")
+        panel.handle("insertNewline:")
+        #expect(pb.string(forType: .string) == "第一条")
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(!panel.isVisible)
+        panel.show()
+        panel.handle("cancelOperation:")
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(!panel.isVisible)
+    }
+
+    /// C5 文字：⌘S 预填正文，选项目 ⏎ 存入
+    @Test func saveTextAsIdea() {
+        add("一个想法")
+        panel.show()
+        panel.saveSelected()
+        #expect(capture.isVisible)
+        #expect(capture.model.clip?.text == "一个想法")
+        #expect(capture.textView.string == "一个想法")
+        #expect(!capture.model.draftRestored)
+        capture.model.selection.toggle(repo.id)
+        capture.submit()
+        let files = mdFiles(repoDir)
+        #expect(files.count == 1)
+        let s = try! String(contentsOf: files[0], encoding: .utf8)
+        #expect(s.hasSuffix("一个想法\n"))
+        #expect(!s.contains("来自剪贴板"))
+        #expect(capture.model.clip == nil)
+    }
+
+    /// C5 图片：拷进 <项目>/assets/，.md 引用相对路径
+    @Test func saveImageAsIdea() throws {
+        pb.clearContents(); pb.setData(ClipMonitorTests.png(30, 20), forType: .png); clip.ingest(frontBundleID: nil)
+        panel.show()
+        panel.saveSelected()
+        #expect(capture.model.clip?.kind == .image)
+        #expect(capture.textView.string.isEmpty)
+        #expect(capture.textView.placeholder == "给这张图写一句…")
+        capture.model.selection.toggle(repo.id)
+        capture.textView.string = "首页截图"
+        capture.submit()
+        let files = mdFiles(repoDir)
+        #expect(files.count == 1)
+        let s = try String(contentsOf: files[0], encoding: .utf8)
+        let assets = try FileManager.default.contentsOfDirectory(atPath: repoDir.appendingPathComponent("assets").path)
+        #expect(assets.count == 1)
+        #expect(s.contains("![](assets/\(assets[0]))\n\n首页截图"))
+        #expect(files[0].lastPathComponent.hasSuffix("-首页截图.md"))
+        #expect(capture.textView.placeholder == IdeaTextView.defaultPlaceholder)
+        // 主窗口数据源里有它，assets 不被当成项目
+        #expect(app.library.ideas.contains { $0.url.lastPathComponent == files[0].lastPathComponent })
+        app.reload()
+        #expect(!app.repos.contains { $0.folder == "assets" })
+    }
+
+    /// C5 文件：只写链接，不复制文件；正文可以为空
+    @Test func saveFileAsIdea() throws {
+        let f = root.appendingPathComponent("资料 v2.pdf")
+        try Data([1]).write(to: f)
+        pb.clearContents(); pb.writeObjects([f as NSURL]); clip.ingest(frontBundleID: nil)
+        panel.show()
+        panel.saveSelected()
+        #expect(capture.textView.placeholder == "给这个文件写一句…")
+        capture.model.selection.toggle(repo.id)
+        capture.submit()
+        let files = mdFiles(repoDir)
+        #expect(files.count == 1)
+        let s = try String(contentsOf: files[0], encoding: .utf8)
+        #expect(s.contains("[资料 v2.pdf](file://"))
+        #expect(s.contains("%E8%B5%84%E6%96%99%20v2.pdf)"))
+        let inRepo = try FileManager.default.contentsOfDirectory(atPath: repoDir.path)
+        #expect(!inRepo.contains("资料 v2.pdf"))
+        #expect(!inRepo.contains("assets"))
+    }
+
+    /// Esc 取消转存：回到剪贴板面板、仍选中原条目、筛选保留；原草稿不受影响
+    @Test func escReturnsToClipboard() async throws {
+        capture.show()
+        capture.textView.string = "没写完的草稿"
+        capture.hide()
+        add("甲"); add("乙"); add("丙")
+        panel.show()
+        type("乙")
+        panel.saveSelected()
+        #expect(capture.textView.string == "乙")
+        _ = capture.textView(capture.textView, doCommandBy: #selector(NSResponder.cancelOperation(_:)))
+        #expect(panel.isVisible)
+        #expect(panel.selected?.text == "乙")
+        #expect(panel.model.query == "乙")
+        #expect(mdFiles(repoDir).isEmpty)
+        #expect(capture.model.clip == nil)
+        panel.hide(animated: false)
+        capture.show()
+        #expect(capture.textView.string == "没写完的草稿")
+    }
+
+    /// 空状态 / 已暂停
+    @Test func emptyAndPaused() {
+        clip.enabled = false
+        panel.show()
+        #expect(panel.shown.isEmpty)
+        panel.handle("insertNewline:") // 没条目：不崩
+        #expect(panel.isVisible)
+        let v = ClipPanelView(model: panel.model, clip: clip, filterField: panel.filterField, onCopy: { _ in }, onSelect: { _ in }, onResume: { [clip] in clip.enabled = true })
+        v.onResume()
+        #expect(clip.enabled)
+    }
+}

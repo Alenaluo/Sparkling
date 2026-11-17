@@ -32,7 +32,10 @@ final class FloatingPanel: NSPanel {
 
 /// 输入框：系统字体 20pt、行高 30pt、无占位时画提示文字。
 final class IdeaTextView: NSTextView {
-    var placeholder = "Catch every little thing··"
+    static let defaultPlaceholder = "Catch every little thing··"
+    var placeholder = IdeaTextView.defaultPlaceholder {
+        didSet { needsDisplay = true }
+    }
     /// design v1.0：正文 14pt / 行高 22
     static let fontSize: CGFloat = 14
     static let lineHeight: CGFloat = 22
@@ -110,6 +113,14 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
     var dismissedMentionAt: Int?
     var hudTimer: Timer?
 
+    // v2 ⌘S 存成灵感（design §11.2）
+    /// 剪贴板历史（取图片文件用）
+    var clipboard: ClipboardModel?
+    /// Esc 取消转存：回到剪贴板面板并选中原条目
+    var onClipCancel: (ClipItem) -> Void = { _ in }
+    /// 转存前的草稿，转存结束（保存 / 取消）后恢复
+    var stashedDraft: (text: String, selection: TagSelection)?
+
     public init(app: AppModel) {
         self.app = app
         super.init()
@@ -163,7 +174,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
         model.createError = nil
         model.rootMissing = app.loadError != nil
         // 草稿恢复：正文 + 选择；保存成功后为空、未选
-        let restored = !draftText.isEmpty
+        let restored = !draftText.isEmpty && model.clip == nil
         model.selection = draftSelection
         if let s = model.selection.selected, !model.repos.contains(where: { $0.id == s }) { model.selection.clear() }
         model.draftRestored = restored
@@ -189,10 +200,12 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
         }
     }
 
-    /// 关闭并保留草稿（Esc / 失焦）
+    /// 关闭并保留草稿（Esc / 失焦）；转存模式下丢弃预填内容、恢复原草稿
     public func hide() {
-        draftText = textView.string
-        draftSelection = model.selection
+        if model.clip != nil { exitClipMode() } else {
+            draftText = textView.string
+            draftSelection = model.selection
+        }
         closePopup()
         guard panel.isVisible else { return }
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -247,7 +260,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
         let h = textView.contentHeight
         if model.textHeight != h { model.textHeight = h }
         model.isEmpty = textView.string.isEmpty
-        let maxText = TagLayout.maxHeight - TagLayout.writingChrome - model.footerHeight - (model.draftRestored ? 22 : 0)
+        let maxText = TagLayout.maxHeight - TagLayout.writingChrome - model.footerHeight - (model.draftRestored ? 22 : 0) - model.clipHeaderHeight
         scrollView.hasVerticalScroller = h > maxText
         if h > maxText { textView.scrollRangeToVisible(textView.selectedRange()) }
         relayout()
@@ -315,7 +328,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
         case .swallow: return true
         case .submit: submit(); return true
         case .newline: textView.insertNewlineIgnoringFieldEditor(nil); return true
-        case .cancel: hide(); return true
+        case .cancel: cancel(); return true
         case .nextTag: model.selection.next(visible: model.visibleIDs); return true
         case .prevTag: model.selection.previous(visible: model.visibleIDs); return true
         case .popupUp: movePopup(-1); return true
@@ -493,16 +506,31 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
 
     func submit() {
         let text = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { shake(); return }
+        let attached = model.clip.map { $0.kind != .text } ?? false
+        guard !text.isEmpty || attached else { shake(); return }
         let repo = model.selectedRepo
         do {
-            let idea = try app.store.saveIdea(text, to: repo)
+            var body = text
+            var hint: String?
+            if let item = model.clip, item.kind != .text {
+                var asset: String?
+                if item.kind == .image {
+                    guard let src = clipboard?.store.imageURL(item), FileManager.default.fileExists(atPath: src.path) else {
+                        throw LibraryError.notWritable("找不到这张图片")
+                    }
+                    asset = try app.store.copyAsset(from: src, to: repo, baseName: ClipMarkdown.nameHint(note: text, item: item))
+                }
+                body = ClipMarkdown.body(note: text, item: item, assetPath: asset)
+                hint = ClipMarkdown.nameHint(note: text, item: item)
+            }
+            let idea = try app.store.saveIdea(body, to: repo, nameHint: hint)
             log.info("saved \(idea.url.lastPathComponent, privacy: .public) → \(repo?.folder ?? "Inbox", privacy: .public)")
             app.didSave(idea)
             draftText = ""
             draftSelection = TagSelection()
             textView.string = ""
             model.selection = TagSelection()
+            if model.clip != nil { exitClipMode() }
             model.errorMessage = nil
             let frame = panel.frame
             hide()
@@ -512,6 +540,40 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
             model.errorMessage = (error as? LocalizedError)?.errorDescription ?? "Sparkling 文件夹不可写"
             relayout()
         }
+    }
+
+    // MARK: v2 ⌘S 存成灵感
+
+    /// 在剪贴板面板原位置打开记录面板，正文预填（文字放原文；图片 / 文件放卡片，正文留给一句话）
+    public func showPrefilled(_ item: ClipItem) {
+        if model.clip == nil { stashedDraft = (draftText, draftSelection) }
+        model.clip = item
+        model.clipImage = item.kind == .image ? clipboard?.image(item) : nil
+        model.clipDetail = item.kind == .files ? (clipboard?.fileDetail(item) ?? "") : ""
+        textView.placeholder = item.kind == .image ? "给这张图写一句…" : item.kind == .files ? "给这个文件写一句…" : IdeaTextView.defaultPlaceholder
+        draftText = item.kind == .text ? (item.text ?? "") : ""
+        draftSelection = TagSelection()
+        show()
+    }
+
+    /// Esc：转存模式下回到剪贴板面板
+    func cancel() {
+        let item = model.clip
+        hide()
+        if let item { onClipCancel(item) }
+    }
+
+    /// 结束转存：清掉预填，恢复转存前的草稿
+    func exitClipMode() {
+        model.clip = nil
+        model.clipImage = nil
+        model.clipDetail = ""
+        textView.placeholder = IdeaTextView.defaultPlaceholder
+        if let s = stashedDraft { draftText = s.text; draftSelection = s.selection }
+        stashedDraft = nil
+        // 之后再触发的 hide（如失焦）存进草稿的就是原草稿
+        textView.string = draftText
+        model.selection = draftSelection
     }
 
     func shake() {

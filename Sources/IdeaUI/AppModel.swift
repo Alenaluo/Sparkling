@@ -20,11 +20,16 @@ public final class AppModel {
         didSet { UserDefaults.standard.set(texture.rawValue, forKey: "texture") }
     }
 
+    /// v2 剪贴板历史（只存在这台 Mac 上，见 tech.md §13.1）
+    public let clipboard: ClipboardModel
+
     public var rootIsFromEnv: Bool { !(ProcessInfo.processInfo.environment["SPARKLING_ROOT"] ?? "").isEmpty }
 
     public init() {
         if LibraryStore.migrateLegacyDefaultRoot() { log.info("migrated ~/Documents/IdeaNotes → ~/Documents/Sparkling") }
-        store = LibraryStore(root: LibraryStore.resolveRoot())
+        let root = LibraryStore.resolveRoot()
+        store = LibraryStore(root: root)
+        clipboard = ClipboardModel(dir: ClipboardStore.defaultDir(root: root))
         reload()
     }
 

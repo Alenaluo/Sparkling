@@ -17,6 +17,26 @@ final class CaptureModel {
     var errorMessage: String?
     var rootMissing = false
 
+    /// v2 ⌘S 存成灵感：来自剪贴板的条目（只在面板里显示「来自剪贴板」，不写进文件）
+    var clip: ClipItem?
+    var clipImage: NSImage?
+    var clipDetail = ""
+    /// 正文上方「来自剪贴板」标签 + 图片 / 文件卡片占的高度
+    var clipHeaderHeight: CGFloat {
+        guard let clip else { return 0 }
+        var h: CGFloat = 20 + 6
+        switch clip.kind {
+        case .text: break
+        case .image: h += Self.imageCardHeight(clipImage) + 10
+        case .files: h += 64 + 10
+        }
+        return h
+    }
+    static func imageCardHeight(_ img: NSImage?) -> CGFloat {
+        guard let img, img.size.width > 0 else { return 150 }
+        return min(150, 392 * img.size.height / img.size.width)
+    }
+
     // @ 补全浮层
     var popupItems: [Repo] = []
     var popupQuery: String = ""
@@ -141,7 +161,7 @@ struct CapturePanelView: View {
 
     /// 书写区里文字最多能占的高度：卡片最高 560 减去内边距、底栏、草稿提示
     var maxTextHeight: CGFloat {
-        TagLayout.maxHeight - TagLayout.writingChrome - model.footerHeight - (model.draftRestored ? 22 : 0)
+        TagLayout.maxHeight - TagLayout.writingChrome - model.footerHeight - (model.draftRestored ? 22 : 0) - model.clipHeaderHeight
     }
 
     var body: some View {
@@ -151,6 +171,9 @@ struct CapturePanelView: View {
                     Text("已恢复未保存的草稿 · ⌘⌫ 清空")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Theme.textSecondary)
+                }
+                if let clip = model.clip {
+                    ClipAttachmentHeader(item: clip, image: model.clipImage, detail: model.clipDetail)
                 }
                 TextViewHost(view: textView)
                     .frame(height: min(model.textHeight, maxTextHeight))

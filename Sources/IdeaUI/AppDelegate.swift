@@ -7,6 +7,8 @@ import IdeaCore
 public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
     public let app = AppModel()
     var capture: CaptureController!
+    var clipPanel: ClipboardController!
+    var clipItem: NSMenuItem!
     var statusItem: NSStatusItem!
     var captureItem: NSMenuItem!
     var warningItem: NSMenuItem!
@@ -26,7 +28,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         capture = CaptureController(app: app)
         capture.openLibrary = { [weak self] in self?.showLibrary() }
         capture.openSettings = { [weak self] in self?.showSettings() }
-        HotkeyCenter.shared.onFire = { [weak self] in self?.capture.toggle() }
+        HotkeyCenter.shared.onFire = { [weak self] in self?.clipPanel.hide(animated: false); self?.capture.toggle() }
+
+        // v2 剪贴板（design §11）
+        clipPanel = ClipboardController(clip: app.clipboard, app: app)
+        capture.clipboard = app.clipboard
+        clipPanel.onSaveAsIdea = { [weak self] item in self?.capture.showPrefilled(item) }
+        capture.onClipCancel = { [weak self] item in self?.clipPanel.show(selecting: item.id, keepQuery: true) }
+        HotkeyCenter.shared.setHandler(.clipboard) { [weak self] in self?.toggleClipboard() }
+        settings.onClipHotkeyChanged = { [weak self] in self?.updateCaptureItem() }
+        app.clipboard.start()
         settings.app = app
         settings.onHotkeyChanged = { [weak self] in
             guard let self else { return }
@@ -42,6 +53,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
             settings.hotkeyError = err
             hotkeyWarning = err
             DispatchQueue.main.async { [weak self] in self?.alertHotkeyFailure(err) }
+        }
+        if let err = HotkeyCenter.shared.register(Hotkey.load(.clipboard), slot: .clipboard) {
+            settings.clipHotkeyError = err
+            log.error("clipboard hotkey: \(err, privacy: .public)")
         }
         updateCaptureItem()
         settings.applyLaunchAtLoginDefault()
@@ -63,6 +78,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         warningItem = menu.addItem(withTitle: "", action: #selector(changeHotkeyAction), keyEquivalent: "")
         warningItem.isHidden = true
         captureItem = menu.addItem(withTitle: "记一条灵感…", action: #selector(captureAction), keyEquivalent: "")
+        clipItem = menu.addItem(withTitle: "剪贴板…", action: #selector(clipboardAction), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "打开全部灵感…", action: #selector(libraryAction), keyEquivalent: "o")
         menu.addItem(withTitle: "偏好设置…", action: #selector(settingsAction), keyEquivalent: ",")
@@ -97,8 +113,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     }
 
     func updateCaptureItem() {
-        guard let hk = HotkeyCenter.shared.current else { captureItem?.title = "记一条灵感…"; return }
-        captureItem.title = "记一条灵感…\t\(hk.display)"
+        if let hk = HotkeyCenter.shared.current { captureItem.title = "记一条灵感…\t\(hk.display)" } else { captureItem?.title = "记一条灵感…" }
+        if let hk = HotkeyCenter.shared.current(.clipboard) { clipItem?.title = "剪贴板…\t\(hk.display)" } else { clipItem?.title = "剪贴板…" }
+    }
+
+    /// ⌥⇧V：剪贴板面板；记录面板开着时先关掉它
+    func toggleClipboard() {
+        if clipPanel.isVisible { clipPanel.hide(); return }
+        if capture.isVisible { capture.hide() }
+        clipPanel.show()
     }
 
     func buildMainMenu() {
@@ -140,6 +163,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     }
 
     @objc func captureAction() { capture.show() }
+    @objc func clipboardAction() { toggleClipboard() }
     @objc func libraryAction() { showLibrary() }
     @objc func settingsAction() { showSettings() }
     @objc func reindexAction() { app.reload() }
