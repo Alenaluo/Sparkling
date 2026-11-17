@@ -112,12 +112,49 @@ struct HotkeyRecorder: NSViewRepresentable {
     }
 }
 
+enum SettingsTab: String, CaseIterable, Identifiable {
+    case general, clipboard
+    var id: String { rawValue }
+    var title: String { self == .general ? "通用" : "剪贴板" }
+    var icon: String { self == .general ? "gearshape" : "doc.on.clipboard" }
+}
+
 struct SettingsView: View {
     @Bindable var model: SettingsModel
     @Environment(AppModel.self) var app
     @State private var pendingRoot: URL?
+    @State private var tab: SettingsTab = .general
 
     var body: some View {
+        VStack(spacing: 0) {
+            // 顶部工具栏图标分页（design §11.4）
+            HStack(spacing: 4) {
+                ForEach(SettingsTab.allCases) { t in
+                    let on = tab == t
+                    VStack(spacing: 3) {
+                        Image(systemName: t.icon).font(.system(size: 17, weight: .medium))
+                        Text(t.title).font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(on ? Theme.accent : Theme.textSecondary)
+                    .frame(width: 72, height: 50)
+                    .background(on ? Theme.selected : .clear, in: RoundedRectangle(cornerRadius: 9))
+                    .contentShape(Rectangle())
+                    .onTapGesture { tab = t }
+                    .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(Theme.block)
+            if tab == .general { generalPage } else { ClipboardSettingsPage(model: model, clip: app.clipboard) }
+        }
+        .frame(width: 540, alignment: .top)
+        .background(Theme.canvas)
+        .onChange(of: model.focusRecorder) { _, on in if on { tab = .general } }
+        .onAppear { if model.focusRecorder { tab = .general } }
+    }
+
+    var generalPage: some View {
         VStack(alignment: .leading, spacing: 18) {
             row("配色") { palettePicker }
             row("底纹") { texturePicker }
@@ -129,7 +166,7 @@ struct SettingsView: View {
                         Text(model.recording ? "请按下新的组合键…（Esc 取消）" : model.hotkey.display)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(model.recording ? Theme.textSecondary : Theme.textPrimary)
-                        HotkeyRecorder(model: model)
+                        HotkeyRecorder(model: model, slot: .capture)
                     }
                     .frame(width: 220, height: 32)
                     if let e = model.hotkeyError {
@@ -167,7 +204,6 @@ struct SettingsView: View {
         }
         .padding(24)
         .frame(width: 540, alignment: .leading)
-        .background(Theme.canvas)
         .onAppear { model.refreshLaunchState() }
         .confirmationDialog("更换存储位置", isPresented: Binding(get: { pendingRoot != nil }, set: { if !$0 { pendingRoot = nil } })) {
             Button("把现有灵感一起搬过去") { applyRoot(move: true) }
@@ -407,5 +443,169 @@ struct PaletteThumb: View {
         let color = Theme.c(selected && t.markerOnSelectedUsesPrimary ? t.primary : t.repoColors[i].0)
         if t.shapes { MarkerShape(kind: i).fill(color).frame(width: 6, height: 6) }
         else { Ellipse().fill(color).frame(width: 6, height: 5).rotationEffect(.degrees(-18)) }
+    }
+}
+
+// MARK: - 偏好设置 · 剪贴板（design §11.4）
+
+struct ClipboardSettingsPage: View {
+    @Bindable var model: SettingsModel
+    @Bindable var clip: ClipboardModel
+    @State private var selectedApp: String?
+    @State private var limitText = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            row("记录剪贴板") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("", isOn: $clip.enabled).toggleStyle(.switch).labelsHidden()
+                    note("只存在这台 Mac 上，不上传；密码管理器等标记为敏感的内容一律跳过")
+                }
+            }
+            row("保存条数") {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 0) {
+                        stepButton("minus") { setLimit(clip.limit - ClipboardStore.limitStep) }
+                        TextField("", text: $limitText)
+                            .textFieldStyle(.plain).multilineTextAlignment(.center)
+                            .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                            .frame(width: 52, height: 28)
+                            .onSubmit { commitLimitText() }
+                        stepButton("plus") { setLimit(clip.limit + ClipboardStore.limitStep) }
+                    }
+                    .background(Theme.block, in: RoundedRectangle(cornerRadius: 9))
+                    note("超过就自动删最早的（10–500）")
+                }
+            }
+            row("剪贴板快捷键") {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 10).fill(Theme.block)
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(model.recordingClip ? Theme.accent : (model.clipHotkeyError != nil ? Theme.danger : .clear), lineWidth: 2))
+                            Text(model.recordingClip ? "请按下新的组合键…（Esc 取消）" : model.clipHotkey.display)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(model.recordingClip ? Theme.textSecondary : Theme.textPrimary)
+                            HotkeyRecorder(model: model, slot: .clipboard)
+                        }
+                        .frame(width: 220, height: 32)
+                        Button("恢复默认") { model.setHotkey(HotkeySlot.clipboard.defaultHotkey, slot: .clipboard) }
+                            .buttonStyle(SecondaryButton())
+                            .disabled(model.clipHotkey == HotkeySlot.clipboard.defaultHotkey && model.clipHotkeyError == nil)
+                    }
+                    if let e = model.clipHotkeyError {
+                        Text(e).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.danger)
+                    } else {
+                        note("呼出剪贴板面板。不能和呼出快捷键相同。")
+                    }
+                }
+            }
+            row("不记录这些 App") {
+                VStack(alignment: .leading, spacing: 0) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(clip.excluded, id: \.self) { b in
+                                HStack(spacing: 8) {
+                                    if let icon = ClipboardModel.appIcon(b) {
+                                        Image(nsImage: icon).resizable().frame(width: 16, height: 16)
+                                    } else {
+                                        Image(systemName: "app").font(.system(size: 13)).frame(width: 16, height: 16).foregroundStyle(Theme.textSecondary)
+                                    }
+                                    Text(ClipboardModel.appName(b)).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 10).frame(height: 28)
+                                .background(selectedApp == b ? Theme.selected : .clear)
+                                .contentShape(Rectangle())
+                                .onTapGesture { selectedApp = b }
+                            }
+                        }
+                    }
+                    .frame(height: 100)
+                    Divider()
+                    HStack(spacing: 0) {
+                        Button { addApp() } label: { Image(systemName: "plus").frame(width: 28, height: 24) }.buttonStyle(.plain)
+                        Divider().frame(height: 14)
+                        Button { removeApp() } label: { Image(systemName: "minus").frame(width: 28, height: 24) }.buttonStyle(.plain)
+                            .disabled(selectedApp == nil)
+                        Spacer()
+                    }
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                }
+                .frame(width: 300)
+                .background(Theme.canvas)
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.lineSoft, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            row("清空历史") {
+                Button("清空剪贴板历史…") { confirmClear() }.buttonStyle(DangerButton())
+                    .disabled(clip.items.isEmpty)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(24)
+        .frame(width: 540, alignment: .leading)
+        .onAppear { limitText = "\(clip.limit)" }
+        .onChange(of: clip.limit) { _, n in limitText = "\(n)" }
+    }
+
+    func row<C: View>(_ label: String, @ViewBuilder content: () -> C) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(label).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textSecondary)
+                .frame(width: 96, alignment: .leading).padding(.top, 6)
+            content()
+        }
+    }
+
+    func note(_ s: String) -> some View {
+        Text(s).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
+    }
+
+    func stepButton(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: icon).font(.system(size: 11, weight: .bold)).frame(width: 28, height: 28).contentShape(Rectangle()) }
+            .buttonStyle(.plain).foregroundStyle(Theme.textPrimary)
+    }
+
+    /// 调小时立即删多出的旧条目（ClipboardModel.limit 的 didSet 里裁剪）
+    func setLimit(_ n: Int) {
+        let stepped = Int((Double(n) / Double(ClipboardStore.limitStep)).rounded()) * ClipboardStore.limitStep
+        clip.limit = ClipboardStore.clampLimit(stepped)
+        limitText = "\(clip.limit)"
+    }
+
+    func commitLimitText() {
+        guard let n = Int(limitText.trimmingCharacters(in: .whitespaces)) else { limitText = "\(clip.limit)"; return }
+        clip.limit = ClipboardStore.clampLimit(n)
+        limitText = "\(clip.limit)"
+    }
+
+    func addApp() {
+        let p = NSOpenPanel()
+        p.allowedContentTypes = [.application]
+        p.directoryURL = URL(fileURLWithPath: "/Applications")
+        p.allowsMultipleSelection = true
+        p.prompt = "不记录"
+        guard p.runModal() == .OK else { return }
+        for u in p.urls {
+            guard let b = Bundle(url: u)?.bundleIdentifier, !clip.excluded.contains(b) else { continue }
+            clip.excluded.append(b)
+        }
+    }
+
+    func removeApp() {
+        guard let b = selectedApp else { return }
+        clip.excluded.removeAll { $0 == b }
+        selectedApp = nil
+    }
+
+    /// 确认框：默认焦点在「取消」
+    func confirmClear() {
+        let a = NSAlert()
+        a.messageText = "清空全部 \(clip.items.count) 条剪贴板记录？"
+        a.informativeText = "清空后不能找回。灵感不受影响。"
+        a.addButton(withTitle: "取消")
+        let clear = a.addButton(withTitle: "清空")
+        clear.hasDestructiveAction = true
+        if a.runModal() == .alertSecondButtonReturn { clip.clear() }
     }
 }

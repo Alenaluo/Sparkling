@@ -33,7 +33,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         // v2 剪贴板（design §11）
         clipPanel = ClipboardController(clip: app.clipboard, app: app)
         capture.clipboard = app.clipboard
-        clipPanel.onSaveAsIdea = { [weak self] item in self?.capture.showPrefilled(item) }
+        clipPanel.onSaveAsIdea = { [weak self] item in self?.capture.showPrefilled(item, returnToClipboard: true) }
         capture.onClipCancel = { [weak self] item in self?.clipPanel.show(selecting: item.id, keepQuery: true) }
         HotkeyCenter.shared.setHandler(.clipboard) { [weak self] in self?.toggleClipboard() }
         settings.onClipHotkeyChanged = { [weak self] in self?.updateCaptureItem() }
@@ -215,12 +215,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     public func showLibrary() {
         app.reload()
         present("library", title: "全部灵感", size: NSSize(width: 960, height: 620), minSize: NSSize(width: 720, height: 480), resizable: true) {
-            LibraryView(openSettings: { [weak self] in self?.showSettings() })
+            LibraryView(openSettings: { [weak self] in self?.showSettings() },
+                        saveClip: { [weak self] item in self?.capture.showPrefilled(item, returnToClipboard: false) })
         }
     }
 
     public func showSettings() {
-        present("settings", title: "偏好设置", size: NSSize(width: 540, height: 520), resizable: false) {
+        present("settings", title: "偏好设置", size: NSSize(width: 540, height: 580), resizable: false) {
             SettingsView(model: settings)
         }
     }

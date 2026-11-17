@@ -3,6 +3,10 @@ import SwiftUI
 import IdeaCore
 
 enum SidebarItem: Hashable {
+    /// v2：所有项目的灵感（design §11.3）
+    case all
+    /// v2：剪贴板历史
+    case clipboard
     case inbox
     case repo(String)
 }
@@ -24,6 +28,8 @@ enum RepoSheetMode: Identifiable {
 struct LibraryView: View {
     @Environment(AppModel.self) var app
     var openSettings: () -> Void
+    /// v2 剪贴板页「存成灵感」：打开记录面板预填
+    var saveClip: (ClipItem) -> Void = { _ in }
 
     @State private var sidebar: SidebarItem? = .inbox
     @State private var selectedID: String?
@@ -61,7 +67,13 @@ struct LibraryView: View {
     }
 
     var isSearching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
-    var listedIdeas: [Idea] { isSearching ? TextSearch.search(query, in: app.library.ideas) : app.library.ideas(in: currentRepo) }
+    var showingAll: Bool { sidebar == .all && !isSearching }
+    /// ⌘F 全局搜索不搜剪贴板：搜索时照常显示灵感结果
+    var onClipboardPage: Bool { sidebar == .clipboard && !isSearching }
+    var listedIdeas: [Idea] {
+        if isSearching || sidebar == .all { return TextSearch.search(isSearching ? query : "", in: app.library.ideas) }
+        return app.library.ideas(in: currentRepo)
+    }
     var groups: [DateGroup] { DateGrouping.groups(listedIdeas) }
     var flatIDs: [String] { groups.flatMap { $0.ideas.map(\.id) } }
     func idea(_ id: String?) -> Idea? { id.flatMap { i in app.library.ideas.first { $0.id == i } } }
@@ -80,7 +92,12 @@ struct LibraryView: View {
             }
             HStack(spacing: 0) {
                 sidebarView.frame(width: 200)
-                listView.frame(maxWidth: .infinity, maxHeight: .infinity)
+                if onClipboardPage {
+                    ClipboardPage(clip: app.clipboard, onSaveAsIdea: saveClip)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    listView.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
         .background(Theme.canvas)
@@ -125,7 +142,7 @@ struct LibraryView: View {
 
     // MARK: 侧栏
 
-    var sidebarItems: [SidebarItem] { [.inbox] + app.library.repos.map { .repo($0.id) } }
+    var sidebarItems: [SidebarItem] { [.all, .clipboard, .inbox] + app.library.repos.map { .repo($0.id) } }
 
     var sidebarView: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -146,6 +163,10 @@ struct LibraryView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
+                    // v2（design §11.3）：「全部灵感」「剪贴板」在最上，下面空 10 再是未归类和项目
+                    topRow("全部灵感", icon: "tray.full", count: app.library.ideas.count, item: .all)
+                    topRow("剪贴板", icon: "doc.on.clipboard", count: app.clipboard.items.count, item: .clipboard)
+                    Color.clear.frame(height: 10)
                     sidebarRow(app.library.inbox, item: .inbox)
                         .contextMenu {
                             Button("在 Finder 中显示") { reveal(app.root.appendingPathComponent(LibraryStore.inboxFolder)) }
@@ -183,6 +204,20 @@ struct LibraryView: View {
         let items = sidebarItems
         let i = sidebar.flatMap { items.firstIndex(of: $0) } ?? 0
         sidebar = items[max(0, min(items.count - 1, i + d))]
+    }
+
+    func topRow(_ title: String, icon: String, count: Int, item: SidebarItem) -> some View {
+        let on = sidebar == item
+        let fg = on ? Theme.onSidebarSelected : Theme.textPrimary
+        return HStack(spacing: 8) {
+            Image(systemName: icon).font(.system(size: 12, weight: .medium)).foregroundStyle(on ? fg : Theme.textSecondary).frame(width: 16, height: 16)
+            Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(fg).frame(maxWidth: .infinity, alignment: .leading)
+            Text("\(count)").font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(on ? fg : Theme.textSecondary)
+        }
+        .padding(.horizontal, 10).frame(minHeight: 30)
+        .background(on ? Theme.sidebarSelected : .clear, in: RoundedRectangle(cornerRadius: 10))
+        .contentShape(Rectangle())
+        .onTapGesture { endEditing(); query = ""; sidebar = item }
     }
 
     func sidebarRow(_ repo: Repo, item: SidebarItem) -> some View {
@@ -225,13 +260,13 @@ struct LibraryView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     HStack(alignment: .firstTextBaseline) {
-                        if !isSearching && renamingID == currentRepo.id {
+                        if !isSearching && !showingAll && renamingID == currentRepo.id {
                             renameField(size: 22, weight: .bold)
                         } else {
-                            Text(isSearching ? "搜索「\(query)」" : currentRepo.displayName)
+                            Text(isSearching ? "搜索「\(query)」" : showingAll ? "全部灵感" : currentRepo.displayName)
                                 .font(.system(size: 22, weight: .bold)).kerning(-0.22).lineSpacing(6)
                                 .foregroundStyle(Theme.textPrimary).lineLimit(1)
-                                .onTapGesture(count: 2) { if !isSearching { startRename(currentRepo, inTitle: true) } }
+                                .onTapGesture(count: 2) { if !isSearching && !showingAll { startRename(currentRepo, inTitle: true) } }
                         }
                         Spacer()
                         Text("\(listedIdeas.count) 条").font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.textSecondary)
@@ -314,7 +349,7 @@ struct LibraryView: View {
                         .foregroundStyle(Theme.textPrimary)
                         .lineLimit(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if isSearching, let repo = app.library.repo(folder: idea.repoFolder) { repoChip(repo) }
+                    if isSearching || showingAll, let repo = app.library.repo(folder: idea.repoFolder) { repoChip(repo) }
                 }
                 .padding(.vertical, 12).padding(.horizontal, 14)
                 .background((isSelected ? Theme.selected : (hoveredID == idea.id ? Theme.block : .clear)), in: RoundedRectangle(cornerRadius: 12))
@@ -372,11 +407,11 @@ struct LibraryView: View {
         } else {
             VStack(spacing: 0) {
                 EmptyCup().frame(width: 64)
-                Text(currentRepo.isInbox ? "还空着 ✓" : "还空着")
+                Text(currentRepo.isInbox && !showingAll ? "还空着 ✓" : "还空着")
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
                     .padding(.top, 16)
-                if !currentRepo.isInbox {
-                    Text("按 \(HotkeyCenter.shared.current?.display ?? Hotkey.load().display) 记一条，选「\(currentRepo.displayName)」就装进这里")
+                if !currentRepo.isInbox || showingAll {
+                    Text(showingAll ? "按 \(HotkeyCenter.shared.current?.display ?? Hotkey.load().display) 记一条，就会出现在这里" : "按 \(HotkeyCenter.shared.current?.display ?? Hotkey.load().display) 记一条，选「\(currentRepo.displayName)」就装进这里")
                         .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                         .padding(.top, 6)
                 }
@@ -583,20 +618,24 @@ struct LibraryView: View {
     var shortcuts: some View {
         Group {
             Button("") { searchFocused = true }.keyboardShortcut("f")
-            Button("") { if let s = selectedID { movingID = s } }.keyboardShortcut("m")
-            Button("") {
-                if textInputFocused { NSApp.sendAction(#selector(NSResponder.deleteToBeginningOfLine(_:)), to: nil, from: nil) }
-                else if let i = idea(selectedID) { trash(i) }
-            }.keyboardShortcut(.delete, modifiers: .command)
-            Button("") {
-                if textInputFocused { NSApp.sendAction(Selector(("undo:")), to: nil, from: nil) } else { performUndo() }
-            }.keyboardShortcut("z")
-            Button("") {
-                if textInputFocused { NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil) }
-                else if let i = idea(selectedID) { copy(i) }
-            }.keyboardShortcut("c")
             Button("") { repoSheet = .create }.keyboardShortcut("n")
-            Button("") { if !currentRepo.isInbox { repoSheet = .edit(currentRepo) } }.keyboardShortcut("i")
+            // 剪贴板页有自己的 ⌘S / ⌘⌫，这几项让给它和输入框
+            Group {
+                Button("") { if let s = selectedID { movingID = s } }.keyboardShortcut("m")
+                Button("") {
+                    if textInputFocused { NSApp.sendAction(#selector(NSResponder.deleteToBeginningOfLine(_:)), to: nil, from: nil) }
+                    else if let i = idea(selectedID) { trash(i) }
+                }.keyboardShortcut(.delete, modifiers: .command)
+                Button("") {
+                    if textInputFocused { NSApp.sendAction(Selector(("undo:")), to: nil, from: nil) } else { performUndo() }
+                }.keyboardShortcut("z")
+                Button("") {
+                    if textInputFocused { NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil) }
+                    else if let i = idea(selectedID) { copy(i) }
+                }.keyboardShortcut("c")
+                Button("") { if !currentRepo.isInbox && !showingAll { repoSheet = .edit(currentRepo) } }.keyboardShortcut("i")
+            }
+            .disabled(onClipboardPage)
         }
         .opacity(0).frame(width: 0, height: 0).allowsHitTesting(false)
     }

@@ -352,3 +352,166 @@ struct ClipAttachmentHeader: View {
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.lineSoft, lineWidth: 1))
     }
 }
+
+// MARK: - 主窗口「剪贴板」页（design §11.3）
+
+struct ClipboardPage: View {
+    let clip: ClipboardModel
+    var onSaveAsIdea: (ClipItem) -> Void
+    @State private var query = ""
+    @State private var selectedID: String?
+    @FocusState private var listFocused: Bool
+
+    var shown: [ClipItem] { clip.filter(query) }
+    var groups: [(day: Date, title: String, items: [ClipItem])] {
+        let cal = Calendar.current
+        var order: [Date] = []
+        var buckets: [Date: [ClipItem]] = [:]
+        for it in shown {
+            let d = cal.startOfDay(for: it.date)
+            if buckets[d] == nil { order.append(d) }
+            buckets[d, default: []].append(it)
+        }
+        return order.map { ($0, DateGrouping.title(for: $0), buckets[$0]!) }
+    }
+    var selected: ClipItem? { shown.first { $0.id == selectedID } }
+
+    var body: some View {
+        GeometryReader { geo in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        header.padding(.horizontal, 40).padding(.top, 28).padding(.bottom, 20)
+                        if !clip.enabled {
+                            PausedBanner(onResume: { clip.enabled = true }).padding(.horizontal, 40).padding(.bottom, 16)
+                        }
+                        if shown.isEmpty {
+                            empty.frame(maxWidth: .infinity).frame(height: max(220, geo.size.height - 76))
+                        }
+                        ForEach(Array(groups.enumerated()), id: \.element.day) { gi, g in
+                            Section {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    ForEach(g.items) { item in row(item).id(item.id) }
+                                }
+                                .padding(.horizontal, 28)
+                            } header: {
+                                Text(g.title)
+                                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                                    .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                                    .padding(.horizontal, 40)
+                                    .background(Theme.canvas)
+                                    .padding(.top, gi == 0 ? 0 : 24)
+                                    .background(Theme.canvas)
+                            }
+                        }
+                        Color.clear.frame(height: 24)
+                    }
+                    .frame(minHeight: geo.size.height, alignment: .top)
+                }
+                .background(Theme.canvas)
+                .focusable()
+                .focusEffectDisabled()
+                .focused($listFocused)
+                .onKeyPress(.upArrow) { step(-1, proxy); return .handled }
+                .onKeyPress(.downArrow) { step(1, proxy); return .handled }
+                .onKeyPress(.return) { if let s = selected { clip.copy(s); return .handled }; return .ignored }
+                .background { shortcuts }
+            }
+        }
+        .onChange(of: query) { _, _ in if selected == nil { selectedID = nil } }
+    }
+
+    var header: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text("剪贴板").font(.system(size: 22, weight: .bold)).kerning(-0.22).foregroundStyle(Theme.textPrimary)
+            Text("最近 \(clip.items.count) 条 · 只存在这台 Mac 上").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                TextField("筛选", text: $query).textFieldStyle(.plain).font(.system(size: 12, weight: .medium))
+                    .onExitCommand { query = "" }
+            }
+            .padding(.horizontal, 10).frame(width: 160, height: 28)
+            .background(Theme.block, in: RoundedRectangle(cornerRadius: 9))
+            Button(clip.enabled ? "暂停记录" : "继续记录") { clip.enabled.toggle() }
+                .buttonStyle(GhostButton())
+        }
+        .frame(minHeight: 28)
+    }
+
+    func row(_ item: ClipItem) -> some View {
+        let on = item.id == selectedID
+        return HStack(alignment: .center, spacing: 0) {
+            ClipRow(item: item, clip: clip, query: query, selected: false, large: true)
+            if on {
+                HStack(spacing: 6) {
+                    Button("复制 ⏎") { clip.copy(item) }.buttonStyle(SmallButton())
+                    Button("存成灵感 ⌘S") { onSaveAsIdea(item) }.buttonStyle(SmallButton())
+                    Button("删除") { delete(item) }.buttonStyle(SmallButton(danger: true))
+                }
+                .padding(.trailing, 12)
+            }
+        }
+        .background(on ? Theme.selected : .clear, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .contentShape(Rectangle())
+        .onTapGesture { selectedID = item.id; listFocused = true }
+    }
+
+    @ViewBuilder var empty: some View {
+        if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+            VStack(spacing: 6) {
+                Text("没有找到「\(query)」").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                Text("筛选会查文字内容和文件名").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
+            }
+        } else {
+            ClipEmptyView()
+        }
+    }
+
+    /// 页内快捷键：⌘S 存成灵感、⌘⌫ 删除（只在选中条目时生效）
+    var shortcuts: some View {
+        Group {
+            Button("") { if let s = selected { onSaveAsIdea(s) } }.keyboardShortcut("s")
+            Button("") { if let s = selected { delete(s) } }.keyboardShortcut(.delete, modifiers: .command)
+        }
+        .opacity(0).frame(width: 0, height: 0).allowsHitTesting(false)
+        .disabled(selected == nil)
+    }
+
+    func step(_ d: Int, _ proxy: ScrollViewProxy) {
+        let ids = groups.flatMap { $0.items.map(\.id) }
+        guard !ids.isEmpty else { return }
+        let i = selectedID.flatMap { ids.firstIndex(of: $0) } ?? (d > 0 ? -1 : ids.count)
+        let next = ids[max(0, min(ids.count - 1, i + d))]
+        selectedID = next
+        withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(next, anchor: .center) }
+    }
+
+    func delete(_ item: ClipItem) {
+        let ids = shown.map(\.id)
+        let i = ids.firstIndex(of: item.id) ?? 0
+        let next = ids.indices.contains(i + 1) ? ids[i + 1] : (i > 0 ? ids[i - 1] : nil)
+        withAnimation(.easeOut(duration: 0.15)) { clip.delete(item) }
+        selectedID = next
+    }
+}
+
+struct SmallButton: ButtonStyle {
+    var danger = false
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.font(.system(size: 12, weight: .medium))
+            .foregroundStyle(danger ? Theme.danger : Theme.textPrimary)
+            .padding(.horizontal, 10).frame(height: 26)
+            .background((danger ? Theme.dangerBg : Theme.canvas).opacity(configuration.isPressed ? 0.7 : 1), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct GhostButton: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textPrimary)
+            .padding(.horizontal, 12).frame(height: 28)
+            .background(Theme.hover.opacity(configuration.isPressed ? 1 : 0.001), in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.lineSoft, lineWidth: 1))
+    }
+}

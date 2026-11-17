@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import Foundation
+import SwiftUI
 import Testing
 @testable import IdeaUI
 @testable import IdeaCore
@@ -319,5 +320,32 @@ import Testing
         let v = ClipPanelView(model: panel.model, clip: clip, filterField: panel.filterField, onCopy: { _ in }, onSelect: { _ in }, onResume: { [clip] in clip.enabled = true })
         v.onResume()
         #expect(clip.enabled)
+    }
+}
+
+/// 主窗口剪贴板页、偏好设置两页（§13 V6）：能排版、不崩；真实点击交给手测
+@MainActor
+@Suite(.serialized) struct ClipViewsSmokeTests {
+    @Test func render() throws {
+        _ = NSApplication.shared
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("sparkling-clipviews-\(UUID().uuidString)")
+        setenv("SPARKLING_ROOT", root.path, 1)
+        let app = AppModel()
+        #expect(app.clipboard.store.dir.path == root.appendingPathComponent(".clipboard").path)
+        let pb = NSPasteboard(name: NSPasteboard.Name("sparkling-test-\(UUID().uuidString)"))
+        let clip = ClipboardModel(dir: root.appendingPathComponent(".c2"), defaults: UserDefaults(suiteName: "sparkling-test-\(UUID().uuidString)")!, pasteboard: pb)
+        pb.clearContents(); pb.setString("hello", forType: .string); clip.ingest(frontBundleID: nil)
+        let views: [NSView] = [
+            NSHostingView(rootView: ClipboardPage(clip: clip, onSaveAsIdea: { _ in }).frame(width: 760, height: 600)),
+            NSHostingView(rootView: ClipboardPage(clip: app.clipboard, onSaveAsIdea: { _ in }).frame(width: 760, height: 600)),
+            NSHostingView(rootView: ClipboardSettingsPage(model: SettingsModel(), clip: clip)),
+            NSHostingView(rootView: ThemedRoot(content: SettingsView(model: SettingsModel())).environment(app)),
+            NSHostingView(rootView: ThemedRoot(content: LibraryView(openSettings: {})).environment(app).frame(width: 960, height: 620)),
+        ]
+        for v in views {
+            v.frame = NSRect(x: 0, y: 0, width: 960, height: 620)
+            v.layoutSubtreeIfNeeded()
+            #expect(v.fittingSize.width > 0)
+        }
     }
 }

@@ -120,6 +120,8 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
     var onClipCancel: (ClipItem) -> Void = { _ in }
     /// 转存前的草稿，转存结束（保存 / 取消）后恢复
     var stashedDraft: (text: String, selection: TagSelection)?
+    /// 从剪贴板面板来的才在 Esc 时回去（主窗口剪贴板页来的直接关）
+    var clipReturns = true
 
     public init(app: AppModel) {
         self.app = app
@@ -545,8 +547,9 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
     // MARK: v2 ⌘S 存成灵感
 
     /// 在剪贴板面板原位置打开记录面板，正文预填（文字放原文；图片 / 文件放卡片，正文留给一句话）
-    public func showPrefilled(_ item: ClipItem) {
+    public func showPrefilled(_ item: ClipItem, returnToClipboard: Bool = true) {
         if model.clip == nil { stashedDraft = (draftText, draftSelection) }
+        clipReturns = returnToClipboard
         model.clip = item
         model.clipImage = item.kind == .image ? clipboard?.image(item) : nil
         model.clipDetail = item.kind == .files ? (clipboard?.fileDetail(item) ?? "") : ""
@@ -560,7 +563,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
     func cancel() {
         let item = model.clip
         hide()
-        if let item { onClipCancel(item) }
+        if let item, clipReturns { onClipCancel(item) }
     }
 
     /// 结束转存：清掉预填，恢复转存前的草稿
