@@ -15,21 +15,33 @@ public final class SettingsModel {
     var onHotkeyChanged: () -> Void = {}
     /// 打开设置时直接进入快捷键录制
     var focusRecorder = false
+    /// v2 剪贴板快捷键（默认 ⌥⇧V）
+    var clipHotkey = Hotkey.load(.clipboard)
+    var clipHotkeyError: String?
+    var recordingClip = false
+    var onClipHotkeyChanged: () -> Void = {}
+
+    func hotkey(_ slot: HotkeySlot) -> Hotkey { slot == .capture ? hotkey : clipHotkey }
+    func error(_ slot: HotkeySlot) -> String? { slot == .capture ? hotkeyError : clipHotkeyError }
+    func isRecording(_ slot: HotkeySlot) -> Bool { slot == .capture ? recording : recordingClip }
+    func setRecording(_ slot: HotkeySlot, _ on: Bool) { if slot == .capture { recording = on } else { recordingClip = on } }
 
     public init() { refreshLaunchState() }
 
     /// 录到新快捷键：先试注册，失败则恢复旧的并提示（D9）
-    func setHotkey(_ hk: Hotkey) {
-        let old = HotkeyCenter.shared.current ?? hotkey
-        if let err = HotkeyCenter.shared.register(hk) {
+    func setHotkey(_ hk: Hotkey, slot: HotkeySlot = .capture) {
+        let old = HotkeyCenter.shared.current(slot) ?? hotkey(slot)
+        let err = HotkeyCenter.shared.register(hk, slot: slot)
+        if err != nil { HotkeyCenter.shared.register(old, slot: slot) } else { hk.save(slot) }
+        if slot == .capture {
+            if err == nil { hotkey = hk }
             hotkeyError = err
-            HotkeyCenter.shared.register(old)
+            onHotkeyChanged()
         } else {
-            hotkey = hk
-            hk.save()
-            hotkeyError = nil
+            if err == nil { clipHotkey = hk }
+            clipHotkeyError = err
+            onClipHotkeyChanged()
         }
-        onHotkeyChanged()
     }
 
     func refreshLaunchState() {
@@ -60,21 +72,23 @@ public final class SettingsModel {
 /// 快捷键录制框
 struct HotkeyRecorder: NSViewRepresentable {
     @Bindable var model: SettingsModel
+    var slot: HotkeySlot = .capture
 
     final class RecorderView: NSView {
         var model: SettingsModel!
+        var slot: HotkeySlot = .capture
         override var acceptsFirstResponder: Bool { true }
-        override func becomeFirstResponder() -> Bool { model.recording = true; HotkeyCenter.shared.unregister(); return true }
+        override func becomeFirstResponder() -> Bool { model.setRecording(slot, true); HotkeyCenter.shared.unregister(slot); return true }
         override func resignFirstResponder() -> Bool {
-            if model.recording { model.recording = false; HotkeyCenter.shared.register(model.hotkey) }
+            if model.isRecording(slot) { model.setRecording(slot, false); HotkeyCenter.shared.register(model.hotkey(slot), slot: slot) }
             return true
         }
         override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self) }
         override func keyDown(with event: NSEvent) {
             if event.keyCode == 53 { window?.makeFirstResponder(nil); return } // Esc 取消
             guard let hk = Hotkey(event: event) else { NSSound.beep(); return }
-            model.recording = false
-            model.setHotkey(hk)
+            model.setRecording(slot, false)
+            model.setHotkey(hk, slot: slot)
             window?.makeFirstResponder(nil)
         }
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -84,11 +98,12 @@ struct HotkeyRecorder: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> RecorderView {
-        let v = RecorderView(); v.model = model; return v
+        let v = RecorderView(); v.model = model; v.slot = slot; return v
     }
     func updateNSView(_ nsView: RecorderView, context: Context) {
         nsView.model = model
-        if model.focusRecorder {
+        nsView.slot = slot
+        if slot == .capture && model.focusRecorder {
             DispatchQueue.main.async {
                 model.focusRecorder = false
                 nsView.window?.makeFirstResponder(nsView)

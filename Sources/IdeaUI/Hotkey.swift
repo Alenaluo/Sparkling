@@ -74,64 +74,93 @@ public struct Hotkey: Codable, Equatable, Sendable {
         return false
     }
 
+    /// v2 剪贴板面板默认 ⌥⇧V
+    public static let clipboardDefault = Hotkey(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(shiftKey | optionKey))
+
     // 持久化
     static let defaultsKey = "hotkey"
-    public static func load() -> Hotkey {
-        guard let d = UserDefaults.standard.data(forKey: defaultsKey), let h = try? JSONDecoder().decode(Hotkey.self, from: d) else { return .default }
+    public static func load(_ slot: HotkeySlot = .capture) -> Hotkey {
+        guard let d = UserDefaults.standard.data(forKey: slot.defaultsKey), let h = try? JSONDecoder().decode(Hotkey.self, from: d) else { return slot.defaultHotkey }
         return h
     }
-    func save() { UserDefaults.standard.set(try? JSONEncoder().encode(self), forKey: Self.defaultsKey) }
+    func save(_ slot: HotkeySlot = .capture) { UserDefaults.standard.set(try? JSONEncoder().encode(self), forKey: slot.defaultsKey) }
+}
+
+/// 全局快捷键的用途：1 = 呼出记录面板，2 = 剪贴板面板（v2）
+public enum HotkeySlot: UInt32, CaseIterable, Sendable {
+    case capture = 1, clipboard = 2
+    var defaultsKey: String { self == .capture ? Hotkey.defaultsKey : "clipHotkey" }
+    public var defaultHotkey: Hotkey { self == .capture ? .default : .clipboardDefault }
+    var other: HotkeySlot { self == .capture ? .clipboard : .capture }
+    var title: String { self == .capture ? "呼出快捷键" : "剪贴板快捷键" }
 }
 
 /// Carbon 全局热键注册。无需辅助功能权限。
 @MainActor
 final class HotkeyCenter {
     static let shared = HotkeyCenter()
-    private var ref: EventHotKeyRef?
+    private var refs: [HotkeySlot: EventHotKeyRef] = [:]
     private var handlerInstalled = false
-    var onFire: (() -> Void)?
-    private(set) var current: Hotkey?
+    private var handlers: [HotkeySlot: () -> Void] = [:]
+    private(set) var registered: [HotkeySlot: Hotkey] = [:]
+
+    /// 记录面板（slot 1）
+    var onFire: (() -> Void)? { get { handlers[.capture] } set { handlers[.capture] = newValue } }
+    var current: Hotkey? { registered[.capture] }
+    func current(_ slot: HotkeySlot) -> Hotkey? { registered[slot] }
+    func setHandler(_ slot: HotkeySlot, _ f: @escaping () -> Void) { handlers[slot] = f }
+
+    /// 与另一个用途的快捷键相同？（比对已注册的，没注册就比对已保存的）
+    static func conflictMessage(_ hk: Hotkey, slot: HotkeySlot, other: Hotkey?) -> String? {
+        guard let other, other == hk else { return nil }
+        return "\(hk.display) 已用作\(slot.other.title)，请换一个"
+    }
 
     /// 注册；返回 nil 表示成功，否则返回错误说明。
     @discardableResult
-    func register(_ hk: Hotkey) -> String? {
+    func register(_ hk: Hotkey, slot: HotkeySlot = .capture) -> String? {
         installHandler()
-        unregister()
+        unregister(slot)
+        if let msg = Self.conflictMessage(hk, slot: slot, other: registered[slot.other] ?? Hotkey.load(slot.other)) { return msg }
         if hk.conflictsWithSystem { return "\(hk.display) 已被系统快捷键占用" }
         var newRef: EventHotKeyRef?
-        let id = EventHotKeyID(signature: OSType(0x53504B4C), id: 1) // 'SPKL'
+        let id = EventHotKeyID(signature: OSType(0x53504B4C), id: slot.rawValue) // 'SPKL'
         let status = RegisterEventHotKey(hk.keyCode, hk.modifiers, id, GetApplicationEventTarget(), 0, &newRef)
         guard status == noErr, let newRef else {
             log.error("hotkey register failed \(status)")
             return "\(hk.display) 已被其他 App 占用"
         }
-        ref = newRef
-        current = hk
-        log.info("hotkey registered \(hk.display, privacy: .public)")
+        refs[slot] = newRef
+        registered[slot] = hk
+        log.info("hotkey \(slot.rawValue) registered \(hk.display, privacy: .public)")
         return nil
     }
 
-    func unregister() {
-        if let ref { UnregisterEventHotKey(ref) }
-        ref = nil
-        current = nil
+    func unregister(_ slot: HotkeySlot = .capture) {
+        if let ref = refs[slot] { UnregisterEventHotKey(ref) }
+        refs[slot] = nil
+        registered[slot] = nil
     }
 
     private func installHandler() {
         guard !handlerInstalled else { return }
         handlerInstalled = true
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
             let t = CFAbsoluteTimeGetCurrent()
-            DispatchQueue.main.async { MainActor.assumeIsolated { HotkeyCenter.shared.fired(at: t) } }
+            var hkID = EventHotKeyID()
+            GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil,
+                              MemoryLayout<EventHotKeyID>.size, nil, &hkID)
+            let slot = HotkeySlot(rawValue: hkID.id) ?? .capture
+            DispatchQueue.main.async { MainActor.assumeIsolated { HotkeyCenter.shared.fired(slot, at: t) } }
             return noErr
         }, 1, &spec, nil, nil)
     }
 
     var lastFire: CFAbsoluteTime = 0
-    private func fired(at t: CFAbsoluteTime) {
+    private func fired(_ slot: HotkeySlot, at t: CFAbsoluteTime) {
         lastFire = t
-        log.info("hotkey fired")
-        onFire?()
+        log.info("hotkey \(slot.rawValue) fired")
+        handlers[slot]?()
     }
 }
