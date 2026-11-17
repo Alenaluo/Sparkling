@@ -15,7 +15,7 @@ public struct Repo: Identifiable, Hashable, Sendable {
         self.created = created; self.colorIndex = colorIndex; self.isInbox = isInbox
     }
 
-    public var displayName: String { isInbox ? "未归类" : folder }
+    public var displayName: String { isInbox ? L("未归类", "Unsorted") : folder }
 }
 
 public struct Idea: Identifiable, Hashable, Sendable {
@@ -57,11 +57,11 @@ public enum LibraryError: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case let .invalidName(m): return m
-        case let .duplicateName(n): return "已经有叫「\(n)」的项目"
-        case let .duplicateShortcode(n): return "已被 \(n) 使用"
-        case .modifiedExternally: return "文件已在别处修改"
+        case let .duplicateName(n): return L("已经有叫「\(n)」的项目", "“\(n)” already exists")
+        case let .duplicateShortcode(n): return L("已被 \(n) 使用", "Already used by \(n)")
+        case .modifiedExternally: return L("文件已在别处修改", "Changed somewhere else")
         case let .notWritable(m): return m
-        case .inboxIsProtected: return "未归类不能改名或删除"
+        case .inboxIsProtected: return L("未归类不能改名或删除", "Unsorted can't be renamed or deleted")
         }
     }
 }
@@ -121,7 +121,7 @@ public final class LibraryStore: @unchecked Sendable {
         do {
             try fm.createDirectory(at: inboxURL, withIntermediateDirectories: true)
         } catch {
-            throw LibraryError.notWritable("Sparkling 文件夹不可写")
+            throw LibraryError.notWritable(L("Sparkling 文件夹不可写", "the Sparkling folder isn't writable"))
         }
     }
 
@@ -212,7 +212,7 @@ public final class LibraryStore: @unchecked Sendable {
         do {
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
         } catch {
-            throw LibraryError.notWritable("Sparkling 文件夹不可写")
+            throw LibraryError.notWritable(L("Sparkling 文件夹不可写", "the Sparkling folder isn't writable"))
         }
         let url = FileNamer.uniqueURL(in: dir, base: FileNamer.baseName(for: nameHint ?? body, date: date))
         var fmv = Frontmatter()
@@ -221,7 +221,7 @@ public final class LibraryStore: @unchecked Sendable {
         do {
             try AtomicWriter.write(Frontmatter.compose(fmv, body: body), to: url)
         } catch {
-            throw LibraryError.notWritable("\(folder == Self.inboxFolder ? "未归类" : folder) 文件夹不可写")
+            throw LibraryError.notWritable(L("\(folder == Self.inboxFolder ? "未归类" : folder) 文件夹不可写", "the “\(folder == Self.inboxFolder ? "Unsorted" : folder)” folder isn't writable"))
         }
         return readIdea(url: url, folder: folder)!
     }
@@ -237,7 +237,7 @@ public final class LibraryStore: @unchecked Sendable {
             try fm.copyItem(at: src, to: dst)
             return "assets/" + dst.lastPathComponent
         } catch {
-            throw LibraryError.notWritable("\(folder == Self.inboxFolder ? "未归类" : folder) 文件夹不可写")
+            throw LibraryError.notWritable(L("\(folder == Self.inboxFolder ? "未归类" : folder) 文件夹不可写", "the “\(folder == Self.inboxFolder ? "Unsorted" : folder)” folder isn't writable"))
         }
     }
 

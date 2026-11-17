@@ -188,3 +188,46 @@ import Testing
         #expect(IdeaAttachments.parse("普通").compose(text: "改了 ") == "改了 ")
     }
 }
+
+/// 英文界面（product D24 / §11，E2 E4）
+@Suite struct LangTests {
+    @Test func resolve() {
+        #expect(Lang.resolve(.system, preferred: ["zh-Hans-CN", "en"]) == .zh)
+        #expect(Lang.resolve(.system, preferred: ["zh-Hant-TW"]) == .zh)
+        #expect(Lang.resolve(.system, preferred: ["en-US", "zh-Hans"]) == .en)
+        #expect(Lang.resolve(.system, preferred: ["ja-JP"]) == .en)
+        #expect(Lang.resolve(.system, preferred: []) == .en)
+        #expect(Lang.resolve(.zh, preferred: ["en"]) == .zh)
+        #expect(Lang.resolve(.en, preferred: ["zh-Hans"]) == .en)
+        let d = UserDefaults(suiteName: "lang-\(UUID().uuidString)")!
+        #expect(Lang.loadSetting(d) == .system)
+        Lang.saveSetting(.en, d)
+        #expect(Lang.loadSetting(d) == .en)
+    }
+
+    @Test func plurals() {
+        #expect(Plural.ideas(0, lang: .en) == "No ideas")
+        #expect(Plural.ideas(1, lang: .en) == "1 idea")
+        #expect(Plural.ideas(3, lang: .en) == "3 ideas")
+        #expect(Plural.ideas(3, lang: .zh) == "3 条")
+        #expect(Plural.items(1, lang: .en) == "1 item")
+        #expect(Plural.files(2, lang: .en) == "2 files")
+        #expect(Q("X", lang: .en) == "“X”" && Q("X", lang: .zh) == "「X」")
+    }
+
+    @Test func englishDates() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let now = cal.date(from: DateComponents(year: 2026, month: 11, day: 17, hour: 15))!
+        func d(_ y: Int, _ m: Int, _ day: Int) -> Date { cal.date(from: DateComponents(year: y, month: m, day: day))! }
+        #expect(DateGrouping.title(for: d(2026, 11, 17), now: now, calendar: cal, lang: .en) == "Today · Tue, Nov 17")
+        #expect(DateGrouping.title(for: d(2026, 11, 16), now: now, calendar: cal, lang: .en) == "Yesterday · Mon, Nov 16")
+        #expect(DateGrouping.title(for: d(2026, 11, 12), now: now, calendar: cal, lang: .en) == "Thu, Nov 12")
+        #expect(DateGrouping.title(for: d(2025, 11, 3), now: now, calendar: cal, lang: .en) == "Mon, Nov 3, 2025")
+        #expect(DateGrouping.title(for: d(2026, 11, 17), now: now, calendar: cal, lang: .zh) == "今天 · 11月17日 周二")
+        #expect(ClipTime.label(now.addingTimeInterval(-10), now: now, calendar: cal, lang: .en) == "Just now")
+        #expect(ClipTime.label(now.addingTimeInterval(-300), now: now, calendar: cal, lang: .en) == "5 min ago")
+        #expect(ClipTime.label(cal.date(from: DateComponents(year: 2026, month: 11, day: 16, hour: 21, minute: 8))!, now: now, calendar: cal, lang: .en) == "Yesterday 21:08")
+        #expect(ClipTime.label(d(2026, 11, 12), now: now, calendar: cal, lang: .en) == "Nov 12")
+    }
+}

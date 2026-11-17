@@ -258,12 +258,12 @@ public enum RenamePolicy {
         let name = input.trimmingCharacters(in: .whitespacesAndNewlines)
         if name == repo.folder { return .unchanged }
         // 文案按 design v1.1 §5.3
-        if name.isEmpty { return .rejected("名称不能为空，已恢复为「\(repo.folder)」") }
+        if name.isEmpty { return .rejected(L("名称不能为空，已恢复为「\(repo.folder)」", "Name can't be empty — restored to “\(repo.folder)”")) }
         if let other = others.first(where: { $0.id != repo.id && $0.folder.compare(name, options: .caseInsensitive) == .orderedSame }) {
-            return .rejected("已有同名项目「\(other.folder)」，已恢复为「\(repo.folder)」")
+            return .rejected(L("已有同名项目「\(other.folder)」，已恢复为「\(repo.folder)」", "“\(other.folder)” already exists — restored to “\(repo.folder)”"))
         }
-        if name.contains("/") || name.contains(":") || name.contains("\\") { return .rejected("名称不能包含 / 或 :") }
-        if let p = FileNamer.repoNameProblem(name) { return .rejected("\(p)，已恢复为「\(repo.folder)」") }
+        if name.contains("/") || name.contains(":") || name.contains("\\") { return .rejected(L("名称不能包含 / 或 :", "Names can't contain / or :")) }
+        if let p = FileNamer.repoNameProblem(name) { return .rejected(L("\(p)，已恢复为「\(repo.folder)」", "\(p) — restored to “\(repo.folder)”")) }
         return .rename(name)
     }
 }

@@ -106,15 +106,15 @@ public enum FileNamer {
     /// 仓库名是否合法：非空、不含路径非法字符、不以点开头、不是保留名。
     public static func repoNameProblem(_ name: String) -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return "名称不能为空" }
+        if trimmed.isEmpty { return L("名称不能为空", "Name can't be empty") }
         if trimmed.unicodeScalars.contains(where: { CharacterSet(charactersIn: "/:\\").union(.newlines).contains($0) }) {
-            return "名称不能包含 / : \\"
+            return L("名称不能包含 / : \\", "Names can't contain / : \\")
         }
-        if trimmed.hasPrefix(".") { return "名称不能以 . 开头" }
-        if trimmed.compare(LibraryStore.inboxFolder, options: .caseInsensitive) == .orderedSame || trimmed == "收件箱" || trimmed == "未归类" {
-            return "「\(trimmed)」是保留名称"
+        if trimmed.hasPrefix(".") { return L("名称不能以 . 开头", "Names can't start with .") }
+        if trimmed.compare(LibraryStore.inboxFolder, options: .caseInsensitive) == .orderedSame || trimmed == "收件箱" || trimmed == "未归类" || trimmed.compare("Unsorted", options: .caseInsensitive) == .orderedSame {
+            return L("「\(trimmed)」是保留名称", "“\(trimmed)” is a reserved name")
         }
-        if trimmed.count > 60 { return "名称太长" }
+        if trimmed.count > 60 { return L("名称太长", "Name is too long") }
         return nil
     }
 }

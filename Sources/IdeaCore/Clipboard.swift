@@ -29,12 +29,12 @@ public struct ClipItem: Codable, Identifiable, Equatable, Sendable {
     public var summary: String {
         switch kind {
         case .text: return text ?? ""
-        case .image: return "截图 · \(imageWidth ?? 0) × \(imageHeight ?? 0)"
+        case .image: return L("截图", "Screenshot") + " · \(imageWidth ?? 0) × \(imageHeight ?? 0)"
         case .files:
             let names = fileNames
             if names.count <= 1 { return names.first ?? "" }
-            let shown = names.prefix(2).joined(separator: "、")
-            return "\(names.count) 个文件：\(shown)\(names.count > 2 ? "…" : "")"
+            let shown = names.prefix(2).joined(separator: L("、", ", "))
+            return Plural.files(names.count) + L("：", ": ") + shown + (names.count > 2 ? "…" : "")
         }
     }
 
@@ -216,18 +216,22 @@ public enum ClipFilter {
 
 public enum ClipTime {
     /// 1 分钟内「刚刚」，1 小时内「N 分钟前」，今天「10:42」，昨天「昨天 21:08」，更早「11月12日」
-    public static func label(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+    public static func label(_ date: Date, now: Date = Date(), calendar: Calendar = .current, lang: Lang = Lang.current) -> String {
         let secs = now.timeIntervalSince(date)
-        if secs < 60 { return "刚刚" }
-        if secs < 3600 { return "\(Int(secs / 60)) 分钟前" }
+        if secs < 60 { return L("刚刚", "Just now", lang: lang) }
+        if secs < 3600 { return L("\(Int(secs / 60)) 分钟前", "\(Int(secs / 60)) min ago", lang: lang) }
         let hm = DateFormatter()
         hm.locale = Locale(identifier: "zh_CN")
         hm.calendar = calendar
         hm.timeZone = calendar.timeZone
         hm.dateFormat = "HH:mm"
         if calendar.isDate(date, inSameDayAs: now) { return hm.string(from: date) }
-        if let y = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: y) { return "昨天 " + hm.string(from: date) }
+        if let y = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: y) { return L("昨天 ", "Yesterday ", lang: lang) + hm.string(from: date) }
         let c = calendar.dateComponents([.month, .day], from: date)
+        if lang == .en {
+            let mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][max(0, (c.month ?? 1) - 1)]
+            return "\(mon) \(c.day ?? 0)"
+        }
         return "\(c.month ?? 0)月\(c.day ?? 0)日"
     }
 
@@ -267,8 +271,8 @@ public enum ClipMarkdown {
         let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
         if !n.isEmpty { return n }
         switch item?.kind {
-        case .image?: return "截图"
-        case .files?: return item?.fileNames.first ?? "文件"
+        case .image?: return L("截图", "Screenshot")
+        case .files?: return item?.fileNames.first ?? L("文件", "File")
         default: return n
         }
     }
