@@ -63,7 +63,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         warningItem = menu.addItem(withTitle: "", action: #selector(changeHotkeyAction), keyEquivalent: "")
         warningItem.isHidden = true
         captureItem = menu.addItem(withTitle: "记一条灵感…", action: #selector(captureAction), keyEquivalent: "")
-        menu.addItem(withTitle: "修改快捷键…", action: #selector(changeHotkeyAction), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "打开全部灵感…", action: #selector(libraryAction), keyEquivalent: "o")
         menu.addItem(withTitle: "偏好设置…", action: #selector(settingsAction), keyEquivalent: ",")
@@ -91,6 +90,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         }
     }
 
+    /// 快捷键有问题时的警告项：打开偏好设置并直接进入快捷键录制（D21：菜单里不再单列「修改快捷键…」）
     @objc func changeHotkeyAction() {
         settings.focusRecorder = true
         showSettings()
