@@ -154,3 +154,23 @@ import Testing
         #expect(lib.repos.filter { !$0.isInbox }.map(\.folder) == ["播放器"])
     }
 }
+
+@Suite struct IdeaAttachmentsTests {
+    @Test func parse() {
+        let item = ClipItem(id: "1", date: Date(), kind: .files, paths: ["/Users/me/方案 v2.pdf", "/tmp/a[1].txt"], fingerprint: "x")
+        let body = ClipMarkdown.body(note: "看看这个\n第二行", item: item, assetPath: nil)
+        let a = IdeaAttachments.parse(body)
+        #expect(a.files == [.init(name: "方案 v2.pdf", path: "/Users/me/方案 v2.pdf"), .init(name: "a[1].txt", path: "/tmp/a[1].txt")])
+        #expect(a.text == "看看这个\n第二行")
+
+        let img = IdeaAttachments.parse("![](assets/2026-11-18-0034-截图.png)")
+        #expect(img.images == ["assets/2026-11-18-0034-截图.png"] && img.text.isEmpty)
+        let img2 = IdeaAttachments.parse("![](assets/x.png)\n\n首页截图")
+        #expect(img2.images == ["assets/x.png"] && img2.text == "首页截图")
+
+        // 普通文字、中间出现的链接不动
+        let plain = IdeaAttachments.parse("想法 ![](a.png)\n[x](https://a.com)")
+        #expect(plain.isEmpty && plain.text == "想法 ![](a.png)\n[x](https://a.com)")
+        #expect(IdeaAttachments.parse("[x](https://a.com)").isEmpty)
+    }
+}

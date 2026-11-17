@@ -339,15 +339,13 @@ struct LibraryView: View {
                          onClose: { endEditing() },
                          onConflict: { i, t in conflict = (i, t) })
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 16) {
+                // 开头是图片 / 文件卡片时，时间和卡片顶部对齐
+                HStack(alignment: IdeaAttachments.parse(idea.body).isEmpty ? .firstTextBaseline : .top, spacing: 16) {
                     Text(DateGrouping.time(idea.created))
                         .font(.system(size: 12, weight: .semibold).monospacedDigit())
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 44, alignment: .leading)
-                    highlighted(idea.body)
-                        .font(.system(size: 14)).lineSpacing(5)
-                        .foregroundStyle(Theme.textPrimary)
-                        .lineLimit(3)
+                    rowBody(idea)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if isSearching || showingAll, let repo = app.library.repo(folder: idea.repoFolder) { repoChip(repo) }
                 }
@@ -371,6 +369,40 @@ struct LibraryView: View {
         .popover(isPresented: Binding(get: { movingID == idea.id }, set: { if !$0 { movingID = nil } }), arrowEdge: .trailing) {
             MovePicker(idea: idea, repos: app.library.allRepos, onPick: { target in movingID = nil; move(idea, to: target) }, onCancel: { movingID = nil })
         }
+    }
+
+    /// 正文：开头的图片 / 文件链接按卡片显示（和剪贴板一致），其余文字照旧
+    @ViewBuilder func rowBody(_ idea: Idea) -> some View {
+        let att = IdeaAttachments.parse(idea.body)
+        if att.isEmpty {
+            bodyText(idea.body)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(att.images, id: \.self) { rel in
+                    let img = IdeaImageCache.image(idea.url.deletingLastPathComponent().appendingPathComponent(rel))
+                    ImageCard(image: img, sizeText: img.map(IdeaImageCache.pixelSize) ?? "")
+                        .contentShape(Rectangle())
+                        .contextMenu {
+                            Button("打开图片") { NSWorkspace.shared.open(idea.url.deletingLastPathComponent().appendingPathComponent(rel)) }
+                        }
+                }
+                ForEach(att.files, id: \.path) { f in
+                    FileCard(path: f.path, name: f.name, detail: FileCard.detail(f.path))
+                        .contextMenu {
+                            Button("打开文件") { NSWorkspace.shared.open(URL(fileURLWithPath: f.path)) }
+                            Button("在 Finder 中显示") { reveal(URL(fileURLWithPath: f.path)) }
+                        }
+                }
+                if !att.text.isEmpty { bodyText(att.text) }
+            }
+        }
+    }
+
+    func bodyText(_ text: String) -> some View {
+        highlighted(text)
+            .font(.system(size: 14)).lineSpacing(5)
+            .foregroundStyle(Theme.textPrimary)
+            .lineLimit(3)
     }
 
     func repoChip(_ repo: Repo) -> some View {

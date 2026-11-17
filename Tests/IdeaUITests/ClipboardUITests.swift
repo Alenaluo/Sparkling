@@ -353,3 +353,24 @@ import Testing
         }
     }
 }
+
+/// 11-18 用户反馈：存进灵感后主窗口显示的是 `![](assets/…)` 源码，要和剪贴板一样显示图片
+@MainActor
+@Suite struct IdeaAttachmentRenderTests {
+    @Test func imageIdeaLoadsImage() throws {
+        _ = NSApplication.shared
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("sparkling-att-\(UUID().uuidString)")
+        let store = LibraryStore(root: root)
+        let repo = try store.createRepo(name: "截图", in: store.scan())
+        let src = root.appendingPathComponent("s.png")
+        try ClipMonitorTests.png(40, 30).write(to: src)
+        let rel = try store.copyAsset(from: src, to: repo, baseName: "截图")
+        let idea = try store.saveIdea("![](\(rel))", to: repo, nameHint: "截图")
+        let att = IdeaAttachments.parse(idea.body)
+        #expect(att.images == [rel])
+        let img = IdeaImageCache.image(idea.url.deletingLastPathComponent().appendingPathComponent(att.images[0]))
+        #expect(img != nil)
+        #expect(IdeaImageCache.pixelSize(img!) == "40 × 30")
+        #expect(FileCard.detail("/no/such/file.pdf") == "找不到原文件")
+    }
+}

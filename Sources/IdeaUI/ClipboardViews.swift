@@ -319,37 +319,85 @@ struct ClipAttachmentHeader: View {
     }
 
     var imageCard: some View {
+        ImageCard(image: image, sizeText: "\(item.imageWidth ?? 0) × \(item.imageHeight ?? 0)")
+    }
+
+    var fileCard: some View {
+        FileCard(path: item.paths?.first ?? "", name: item.summary, detail: detail)
+    }
+}
+
+/// 图片卡片：宽满、最高 150、圆角 12、1pt 内描边，右下角半透明尺寸标（design §11.2；主窗口灵感里的图片同样显示）
+struct ImageCard: View {
+    let image: NSImage?
+    let sizeText: String
+    var body: some View {
         let h = CaptureModel.imageCardHeight(image)
-        return ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .bottomTrailing) {
             if let image {
                 Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity).frame(height: h).clipped()
             } else {
                 Theme.block.frame(height: h)
+                    .overlay(Image(systemName: "photo").font(.system(size: 20)).foregroundStyle(Theme.textTertiary))
             }
-            Text("\(item.imageWidth ?? 0) × \(item.imageHeight ?? 0)")
-                .font(.system(size: 10, weight: .semibold).monospacedDigit()).foregroundStyle(.white)
-                .padding(.horizontal, 6).frame(height: 18)
-                .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 5))
-                .padding(8)
+            if !sizeText.isEmpty {
+                Text(sizeText)
+                    .font(.system(size: 10, weight: .semibold).monospacedDigit()).foregroundStyle(.white)
+                    .padding(.horizontal, 6).frame(height: 18)
+                    .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 5))
+                    .padding(8)
+            }
         }
+        .frame(maxWidth: 392)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.lineSoft, lineWidth: 1))
     }
+}
 
-    var fileCard: some View {
+/// 文件卡片：白底、1pt 内描边、圆角 12：图标 40 + 文件名 +「位置 · 大小」
+struct FileCard: View {
+    let path: String
+    let name: String
+    let detail: String
+    var body: some View {
         HStack(spacing: 12) {
-            FileIcon(path: item.paths?.first ?? "", size: 40)
+            FileIcon(path: path, size: 40)
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.summary).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textPrimary).lineLimit(1).truncationMode(.middle)
+                Text(name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textPrimary).lineLimit(1).truncationMode(.middle)
                 Text(detail).font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
+        .frame(maxWidth: 392)
         .frame(height: 64)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.lineSoft, lineWidth: 1))
+    }
+
+    /// 「位置 · 大小」；文件已不在原处时写「找不到原文件」
+    static func detail(_ path: String) -> String {
+        let dir = ((path as NSString).deletingLastPathComponent as NSString).lastPathComponent
+        guard let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? NSNumber)?.int64Value else { return "找不到原文件" }
+        return "\(dir) · \(ClipTime.size(size))"
+    }
+}
+
+/// 主窗口灵感条目里的图片（带缓存，按文件修改时间失效）
+@MainActor
+enum IdeaImageCache {
+    static var cache: [URL: (Date?, NSImage)] = [:]
+    static func image(_ url: URL) -> NSImage? {
+        let m = (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
+        if let c = cache[url], c.0 == m { return c.1 }
+        guard let img = NSImage(contentsOf: url) else { return nil }
+        cache[url] = (m, img)
+        return img
+    }
+    static func pixelSize(_ img: NSImage) -> String {
+        guard let rep = img.representations.first, rep.pixelsWide > 0 else { return "" }
+        return "\(rep.pixelsWide) × \(rep.pixelsHigh)"
     }
 }
 

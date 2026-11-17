@@ -273,3 +273,54 @@ public enum ClipMarkdown {
         }
     }
 }
+
+// MARK: - 灵感正文里的图片 / 文件（主窗口按卡片显示，和剪贴板一致）
+
+public struct IdeaAttachments: Equatable {
+    /// 图片相对路径（相对灵感 .md 所在文件夹），如 `assets/x.png`
+    public var images: [String] = []
+    /// 文件链接：显示名 + 绝对路径
+    public var files: [FileLink] = []
+    /// 去掉开头附件行后的文字
+    public var text: String = ""
+
+    public struct FileLink: Equatable {
+        public var name: String
+        public var path: String
+    }
+
+    public var isEmpty: Bool { images.isEmpty && files.isEmpty }
+
+    /// 只认正文开头连续的 `![](路径)`、`[名](file://…)` 行（ClipMarkdown 写出的格式），其余原样当文字
+    public static func parse(_ body: String) -> IdeaAttachments {
+        var out = IdeaAttachments()
+        var lines = body.components(separatedBy: "\n")
+        while let first = lines.first {
+            let l = first.trimmingCharacters(in: .whitespaces)
+            if l.isEmpty, !out.isEmpty { lines.removeFirst(); continue }
+            if let p = match(l, #"^!\[[^\]]*\]\(<?([^)>]+)>?\)$"#) {
+                out.images.append(p.removingPercentEncoding ?? p)
+            } else if let m = linkMatch(l), let u = URL(string: m.url), u.isFileURL {
+                out.files.append(FileLink(name: m.name, path: u.path))
+            } else { break }
+            lines.removeFirst()
+        }
+        out.text = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return out
+    }
+
+    static func match(_ s: String, _ pattern: String) -> String? {
+        guard let re = try? NSRegularExpression(pattern: pattern),
+              let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)), m.numberOfRanges > 1,
+              let r = Range(m.range(at: 1), in: s) else { return nil }
+        return String(s[r])
+    }
+
+    static func linkMatch(_ s: String) -> (name: String, url: String)? {
+        guard let re = try? NSRegularExpression(pattern: #"^\[((?:\\.|[^\]])*)\]\((file://[^)]+)\)$"#),
+              let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
+              let n = Range(m.range(at: 1), in: s), let u = Range(m.range(at: 2), in: s) else { return nil }
+        let name = String(s[n]).replacingOccurrences(of: "\\]", with: "]").replacingOccurrences(of: "\\[", with: "[")
+        return (name, String(s[u]))
+    }
+}
