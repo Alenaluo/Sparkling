@@ -484,6 +484,10 @@ struct ClipboardPage: View {
             .background(Theme.block, in: RoundedRectangle(cornerRadius: 9))
             Button(clip.enabled ? "暂停记录" : "继续记录") { clip.enabled.toggle() }
                 .buttonStyle(GhostButton())
+            // 用户 11-18 要求：清空也放在这里（同偏好设置，二次确认）
+            Button("清空") { confirmClearClipboard(clip) }
+                .buttonStyle(GhostButton(danger: true))
+                .disabled(clip.items.isEmpty)
         }
         .frame(minHeight: 28)
     }
@@ -556,10 +560,49 @@ struct SmallButton: ButtonStyle {
 }
 
 struct GhostButton: ButtonStyle {
+    var danger = false
+    @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textPrimary)
+        configuration.label.font(.system(size: 12, weight: .medium)).foregroundStyle(danger ? Theme.danger : Theme.textPrimary)
+            .opacity(enabled ? 1 : 0.4)
             .padding(.horizontal, 12).frame(height: 28)
             .background(Theme.hover.opacity(configuration.isPressed ? 1 : 0.001), in: RoundedRectangle(cornerRadius: 9))
             .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.lineSoft, lineWidth: 1))
     }
+}
+
+/// 灵感正文开头的图片 / 文件卡片（列表和编辑卡片共用）
+struct AttachmentCards: View {
+    let att: IdeaAttachments
+    let baseDir: URL
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(att.images, id: \.self) { rel in
+                let url = baseDir.appendingPathComponent(rel)
+                let img = IdeaImageCache.image(url)
+                ImageCard(image: img, sizeText: img.map(IdeaImageCache.pixelSize) ?? "")
+                    .contentShape(Rectangle())
+                    .contextMenu { Button("打开图片") { NSWorkspace.shared.open(url) } }
+            }
+            ForEach(att.files, id: \.path) { f in
+                FileCard(path: f.path, name: f.name, detail: FileCard.detail(f.path))
+                    .contextMenu {
+                        Button("打开文件") { NSWorkspace.shared.open(URL(fileURLWithPath: f.path)) }
+                        Button("在 Finder 中显示") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: f.path)]) }
+                    }
+            }
+        }
+    }
+}
+
+/// 清空剪贴板历史的确认框：默认焦点在「取消」（偏好设置和主窗口剪贴板页共用）
+@MainActor
+func confirmClearClipboard(_ clip: ClipboardModel) {
+    let a = NSAlert()
+    a.messageText = "清空全部 \(clip.items.count) 条剪贴板记录？"
+    a.informativeText = "清空后不能找回。灵感不受影响。"
+    a.addButton(withTitle: "取消")
+    let clear = a.addButton(withTitle: "清空")
+    clear.hasDestructiveAction = true
+    if a.runModal() == .alertSecondButtonReturn { clip.clear() }
 }

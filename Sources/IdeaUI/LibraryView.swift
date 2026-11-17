@@ -378,21 +378,7 @@ struct LibraryView: View {
             bodyText(idea.body)
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(att.images, id: \.self) { rel in
-                    let img = IdeaImageCache.image(idea.url.deletingLastPathComponent().appendingPathComponent(rel))
-                    ImageCard(image: img, sizeText: img.map(IdeaImageCache.pixelSize) ?? "")
-                        .contentShape(Rectangle())
-                        .contextMenu {
-                            Button("打开图片") { NSWorkspace.shared.open(idea.url.deletingLastPathComponent().appendingPathComponent(rel)) }
-                        }
-                }
-                ForEach(att.files, id: \.path) { f in
-                    FileCard(path: f.path, name: f.name, detail: FileCard.detail(f.path))
-                        .contextMenu {
-                            Button("打开文件") { NSWorkspace.shared.open(URL(fileURLWithPath: f.path)) }
-                            Button("在 Finder 中显示") { reveal(URL(fileURLWithPath: f.path)) }
-                        }
-                }
+                AttachmentCards(att: att, baseDir: idea.url.deletingLastPathComponent())
                 if !att.text.isEmpty { bodyText(att.text) }
             }
         }
@@ -689,14 +675,21 @@ struct EditCard: View {
     @State private var original = ""
     @State private var current: Idea?
     @State private var saveTask: Task<Void, Never>?
+    /// 正文开头的图片 / 文件：编辑时照样显示成卡片，输入框只编辑后面的文字，保存时拼回去
+    @State private var att = IdeaAttachments()
+
+    /// 输入框文字 → 完整正文
+    func full(_ t: String) -> String { att.isEmpty ? t : att.compose(text: t) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 16) {
+            HStack(alignment: att.isEmpty ? .firstTextBaseline : .top, spacing: 16) {
                 Text(DateGrouping.time(idea.created))
                     .font(.system(size: 12, weight: .semibold).monospacedDigit())
                     .foregroundStyle(Theme.textSecondary)
                     .frame(width: 44, alignment: .leading)
+                VStack(alignment: .leading, spacing: 8) {
+                if !att.isEmpty { AttachmentCards(att: att, baseDir: idea.url.deletingLastPathComponent()) }
                 TextEditor(text: $text)
                     .font(.system(size: 15)).lineSpacing(7)
                     .foregroundStyle(Theme.textPrimary)
@@ -708,6 +701,7 @@ struct EditCard: View {
                     .onChange(of: text) { _, new in scheduleSave(new) }
                     .onKeyPress(.escape) { onClose(); return .handled }
                     .onExitCommand { onClose() }
+                }
             }
             // D17：编辑态不显示「已自动保存 · Esc 收起」之类提示，只留按钮
             HStack(spacing: 8) {
@@ -724,13 +718,16 @@ struct EditCard: View {
         // 点卡片内空白不算「点外面」：背景层吞掉点击，按钮在前景照常可点
         .background(Color.clear.contentShape(Rectangle()).onTapGesture { focused.wrappedValue = true })
         .onAppear {
-            text = idea.body; original = idea.body; current = idea
+            att = IdeaAttachments.parse(idea.body)
+            text = att.isEmpty ? idea.body : att.text
+            original = idea.body; current = idea
             DispatchQueue.main.async { focused.wrappedValue = true }
         }
         .onDisappear { commitOnExit() }
     }
 
     func scheduleSave(_ value: String) {
+        let value = full(value)
         guard let c = current, EditExitPolicy.shouldAutosave(value, onDisk: c.body) else { saveTask?.cancel(); return }
         saveTask?.cancel()
         saveTask = Task { @MainActor in
@@ -744,7 +741,7 @@ struct EditCard: View {
         saveTask?.cancel()
         // 已被移走或删除：不能在原路径重新写出文件
         guard let c = current, FileManager.default.fileExists(atPath: c.url.path) else { return }
-        if case let .write(body) = EditExitPolicy.decide(original: original, onDisk: c.body, edited: text) {
+        if case let .write(body) = EditExitPolicy.decide(original: original, onDisk: c.body, edited: full(text)) {
             if !write(body) { onConflict(c, body) }
         }
         log.info("edit exit \(c.url.lastPathComponent, privacy: .public)")

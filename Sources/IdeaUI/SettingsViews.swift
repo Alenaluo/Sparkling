@@ -598,14 +598,5 @@ struct ClipboardSettingsPage: View {
         selectedApp = nil
     }
 
-    /// 确认框：默认焦点在「取消」
-    func confirmClear() {
-        let a = NSAlert()
-        a.messageText = "清空全部 \(clip.items.count) 条剪贴板记录？"
-        a.informativeText = "清空后不能找回。灵感不受影响。"
-        a.addButton(withTitle: "取消")
-        let clear = a.addButton(withTitle: "清空")
-        clear.hasDestructiveAction = true
-        if a.runModal() == .alertSecondButtonReturn { clip.clear() }
-    }
+    func confirmClear() { confirmClearClipboard(clip) }
 }

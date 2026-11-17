@@ -174,3 +174,17 @@ import Testing
         #expect(IdeaAttachments.parse("[x](https://a.com)").isEmpty)
     }
 }
+
+@Suite struct IdeaAttachmentsComposeTests {
+    @Test func roundTrip() {
+        let body = "![](assets/a.png)\n[x.pdf](file:///tmp/x.pdf)\n\n原来的话"
+        let a = IdeaAttachments.parse(body)
+        #expect(a.head == "![](assets/a.png)\n[x.pdf](file:///tmp/x.pdf)")
+        #expect(a.compose(text: a.text) == body)
+        #expect(a.compose(text: "  新的话 ") == "![](assets/a.png)\n[x.pdf](file:///tmp/x.pdf)\n\n新的话")
+        // 文字删光：只留附件，不丢引用
+        #expect(a.compose(text: "") == a.head)
+        // 没有附件：原样
+        #expect(IdeaAttachments.parse("普通").compose(text: "改了 ") == "改了 ")
+    }
+}

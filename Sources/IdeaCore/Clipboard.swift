@@ -283,6 +283,15 @@ public struct IdeaAttachments: Equatable {
     public var files: [FileLink] = []
     /// 去掉开头附件行后的文字
     public var text: String = ""
+    /// 开头附件行原文（编辑时不动，保存时拼回去）
+    public var head: String = ""
+
+    /// 编辑后拼回完整正文：附件行 + 空行 + 文字
+    public func compose(text newText: String) -> String {
+        let t = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if head.isEmpty { return newText }
+        return t.isEmpty ? head : head + "\n\n" + t
+    }
 
     public struct FileLink: Equatable {
         public var name: String
@@ -290,11 +299,13 @@ public struct IdeaAttachments: Equatable {
     }
 
     public var isEmpty: Bool { images.isEmpty && files.isEmpty }
+    public init() {}
 
     /// 只认正文开头连续的 `![](路径)`、`[名](file://…)` 行（ClipMarkdown 写出的格式），其余原样当文字
     public static func parse(_ body: String) -> IdeaAttachments {
         var out = IdeaAttachments()
         var lines = body.components(separatedBy: "\n")
+        var headLines: [String] = []
         while let first = lines.first {
             let l = first.trimmingCharacters(in: .whitespaces)
             if l.isEmpty, !out.isEmpty { lines.removeFirst(); continue }
@@ -303,8 +314,10 @@ public struct IdeaAttachments: Equatable {
             } else if let m = linkMatch(l), let u = URL(string: m.url), u.isFileURL {
                 out.files.append(FileLink(name: m.name, path: u.path))
             } else { break }
+            headLines.append(first)
             lines.removeFirst()
         }
+        out.head = headLines.joined(separator: "\n")
         out.text = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         return out
     }
