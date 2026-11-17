@@ -4,6 +4,10 @@ Mac 菜单栏里的灵感便签。在任何 App 里按 `⌥⇧Space` 呼出面�
 
 每个项目是一个文件夹，每条灵感是一个 Markdown 文件，默认放在 `~/Documents/Sparkling`，可以直接用 Obsidian、VS Code 或 Finder 打开、同步、备份。
 
+**剪贴板历史**（0.1.2 起）：按 `⌥⇧V` 翻最近复制过的文字、截图和文件，`⏎` 复制回去，`⌘S` 存成灵感（图片拷进项目的 `assets/`，文件只写链接）。默认保留最近 50 条，只存在这台 Mac 上（`~/Library/Application Support/Sparkling/clipboard/`），不上传；密码管理器标记的敏感内容一律跳过。也可以在主窗口侧栏「剪贴板」里浏览。
+
+**中文 / English**（0.1.2 起）：偏好设置 ›「通用」›「语言」可选跟随系统、中文或 English，重启后生效。
+
 ## 下载安装
 
 要求：macOS 14 Sonoma 或更新，Apple 芯片和 Intel 都支持。
@@ -20,7 +24,8 @@ Mac 菜单栏里的灵感便签。在任何 App 里按 `⌥⇧Space` 呼出面�
 
 ### 常见问题
 
-- **按快捷键没反应**：多半是和别的 App（Raycast、Alfred、ChatGPT 等）抢了同一个键。点菜单栏图标 ›「偏好设置…」，在「呼出快捷键」里换一个。
+- **按快捷键没反应**：多半是和别的 App（Raycast、Alfred、ChatGPT 等）抢了同一个键。点菜单栏图标 ›「偏好设置…」，在「通用」页的「呼出快捷键」里换一个；剪贴板的 `⌥⇧V` 在「剪贴板」页里改。
+- **不想记录剪贴板**：偏好设置 ›「剪贴板」关掉「记录剪贴板」，或把某些 App 加进「不记录这些 App」；「清空剪贴板历史…」会删掉全部记录。
 - **开机自启**：在偏好设置里打开。
 - **卸载**：退出后把 `/Applications/Sparkling.app` 拖进废纸篓。你的灵感文件留在数据文件夹里，不会被删。
 
@@ -52,8 +57,8 @@ swift run ideactl --root ~/IdeaNotes-dev grep 倍速      # 跨仓库搜索
 
 ### 结构
 
-- `Sources/IdeaCore`：纯逻辑（文件头读写、存储、拼音匹配、@ 解析、tag 选择、按键决策、搜索），全部有单测。
-- `Sources/IdeaUI`：AppKit + SwiftUI 界面（热键、呼出面板、HUD、灵感库、设置、首次引导）。
+- `Sources/IdeaCore`：纯逻辑（文件头读写、存储、拼音匹配、@ 解析、tag 选择、按键决策、搜索、剪贴板历史、中英文案），全部有单测。
+- `Sources/IdeaUI`：AppKit + SwiftUI 界面（热键、呼出面板、剪贴板面板、HUD、灵感库、设置、首次引导）。
 - `Sources/Sparkling`：App 入口；`Sources/ideactl`：命令行工具。
 
 ### 已知限制（MVP）
