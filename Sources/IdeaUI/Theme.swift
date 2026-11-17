@@ -10,9 +10,9 @@ public enum Palette: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .milkCoffee: return "奶咖"
-        case .spotBrown: return "斑点棕"
-        case .periwinkle: return "长春花"
+        case .milkCoffee: return L("奶咖", "Latte")
+        case .spotBrown: return L("斑点棕", "Cocoa")
+        case .periwinkle: return L("长春花", "Periwinkle")
         }
     }
 
@@ -201,11 +201,12 @@ enum RelTime {
     static func string(_ d: Date, now: Date = Date()) -> String {
         let cal = Calendar.current
         let f = DateFormatter()
-        f.locale = Locale(identifier: "zh_CN")
-        if cal.isDateInToday(d) { f.dateFormat = "今天 HH:mm" }
-        else if cal.isDateInYesterday(d) { f.dateFormat = "昨天 HH:mm" }
-        else if cal.component(.year, from: d) == cal.component(.year, from: now) { f.dateFormat = "M月d日 HH:mm" }
-        else { f.dateFormat = "yyyy年M月d日" }
+        let en = Lang.current == .en
+        f.locale = Locale(identifier: en ? "en_US_POSIX" : "zh_CN")
+        if cal.isDateInToday(d) { f.dateFormat = en ? "'Today' HH:mm" : "今天 HH:mm" }
+        else if cal.isDateInYesterday(d) { f.dateFormat = en ? "'Yesterday' HH:mm" : "昨天 HH:mm" }
+        else if cal.component(.year, from: d) == cal.component(.year, from: now) { f.dateFormat = en ? "MMM d HH:mm" : "M月d日 HH:mm" }
+        else { f.dateFormat = en ? "MMM d, yyyy" : "yyyy年M月d日" }
         return f.string(from: d)
     }
 }

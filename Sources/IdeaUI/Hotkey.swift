@@ -1,3 +1,4 @@
+import IdeaCore
 import AppKit
 import Carbon.HIToolbox
 import os
@@ -92,7 +93,7 @@ public enum HotkeySlot: UInt32, CaseIterable, Sendable {
     var defaultsKey: String { self == .capture ? Hotkey.defaultsKey : "clipHotkey" }
     public var defaultHotkey: Hotkey { self == .capture ? .default : .clipboardDefault }
     var other: HotkeySlot { self == .capture ? .clipboard : .capture }
-    var title: String { self == .capture ? "呼出快捷键" : "剪贴板快捷键" }
+    var title: String { self == .capture ? L("呼出快捷键", "capture shortcut") : L("剪贴板快捷键", "clipboard shortcut") }
 }
 
 /// Carbon 全局热键注册。无需辅助功能权限。
@@ -113,7 +114,7 @@ final class HotkeyCenter {
     /// 与另一个用途的快捷键相同？（比对已注册的，没注册就比对已保存的）
     static func conflictMessage(_ hk: Hotkey, slot: HotkeySlot, other: Hotkey?) -> String? {
         guard let other, other == hk else { return nil }
-        return "\(hk.display) 已用作\(slot.other.title)，请换一个"
+        return L("\(hk.display) 已用作\(slot.other.title)，请换一个", "\(hk.display) is already the \(slot.other.title). Try another.")
     }
 
     /// 注册；返回 nil 表示成功，否则返回错误说明。
@@ -122,13 +123,13 @@ final class HotkeyCenter {
         installHandler()
         unregister(slot)
         if let msg = Self.conflictMessage(hk, slot: slot, other: registered[slot.other] ?? Hotkey.load(slot.other)) { return msg }
-        if hk.conflictsWithSystem { return "\(hk.display) 已被系统快捷键占用" }
+        if hk.conflictsWithSystem { return L("\(hk.display) 已被系统快捷键占用", "\(hk.display) is used by a system shortcut. Try another.") }
         var newRef: EventHotKeyRef?
         let id = EventHotKeyID(signature: OSType(0x53504B4C), id: slot.rawValue) // 'SPKL'
         let status = RegisterEventHotKey(hk.keyCode, hk.modifiers, id, GetApplicationEventTarget(), 0, &newRef)
         guard status == noErr, let newRef else {
             log.error("hotkey register failed \(status)")
-            return "\(hk.display) 已被其他 App 占用"
+            return L("\(hk.display) 已被其他 App 占用", "\(hk.display) is taken by another app. Try another.")
         }
         refs[slot] = newRef
         registered[slot] = hk

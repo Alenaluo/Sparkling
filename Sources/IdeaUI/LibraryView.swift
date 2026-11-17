@@ -83,8 +83,8 @@ struct LibraryView: View {
             if let err = app.loadError {
                 HStack(spacing: 10) {
                     Text(err).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.danger)
-                    Button("重新选择…") { openSettings() }.buttonStyle(DangerButton())
-                    Button("在原位置新建") { try? app.store.ensureRoot(); app.reload() }.buttonStyle(DangerButton())
+                    Button(L("重新选择…", "Choose…")) { openSettings() }.buttonStyle(DangerButton())
+                    Button(L("在原位置新建", "Recreate Here")) { try? app.store.ensureRoot(); app.reload() }.buttonStyle(DangerButton())
                     Spacer()
                 }
                 .padding(.horizontal, 16).padding(.vertical, 8)
@@ -112,14 +112,14 @@ struct LibraryView: View {
                 DispatchQueue.main.async { deletingRepo = repo }
             })
         }
-        .alert(deletingRepo.map { "删除「\($0.displayName)」？" } ?? "", isPresented: Binding(get: { deletingRepo != nil }, set: { if !$0 { deletingRepo = nil } }), presenting: deletingRepo) { repo in
-            Button("取消", role: .cancel) { deletingRepo = nil }
-            Button("删除", role: .destructive) { deleteRepo(repo) }
+        .alert(deletingRepo.map { L("删除「\($0.displayName)」？", "Delete “\($0.displayName)”?") } ?? "", isPresented: Binding(get: { deletingRepo != nil }, set: { if !$0 { deletingRepo = nil } }), presenting: deletingRepo) { repo in
+            Button(L("取消", "Cancel"), role: .cancel) { deletingRepo = nil }
+            Button(L("删除", "Delete"), role: .destructive) { deleteRepo(repo) }
         } message: { repo in
-            Text("其中 \(app.library.count(in: repo)) 条灵感会移到未归类，文件夹本身会被删除。")
+            Text(L("其中 \(app.library.count(in: repo)) 条灵感会移到未归类，文件夹本身会被删除。", "Its \(app.library.count(in: repo) == 1 ? "1 idea" : "\(app.library.count(in: repo)) ideas") will move to Unsorted. The folder itself will be deleted."))
         }
         .alert(errorAlert ?? "", isPresented: Binding(get: { errorAlert != nil }, set: { if !$0 { errorAlert = nil } })) {
-            Button("好") { errorAlert = nil }
+            Button(L("好", "OK")) { errorAlert = nil }
         }
         .onChange(of: sidebar) { _, _ in selectedID = nil; editingID = nil }
         .onChange(of: editorFocused) { _, focused in
@@ -130,13 +130,13 @@ struct LibraryView: View {
         }
         .onChange(of: activeState) { _, state in if state != .key { endEditing() } }
         .onChange(of: renameFocused) { _, focused in if !focused && renamingID != nil { commitRename() } }
-        .alert("文件已在别处修改", isPresented: Binding(get: { conflict != nil }, set: { if !$0 { conflict = nil } })) {
-            Button("用我的覆盖") {
+        .alert(L("文件已在别处修改", "Changed somewhere else"), isPresented: Binding(get: { conflict != nil }, set: { if !$0 { conflict = nil } })) {
+            Button(L("用我的覆盖", "Keep Mine")) {
                 if let c = conflict { do { let u = try app.store.updateIdea(c.idea, body: c.text, force: true); app.replace(c.idea, with: u) } catch { errorAlert = error.localizedDescription } }
                 conflict = nil
             }
-            Button("载入新版本") { app.reload(); conflict = nil }
-        } message: { Text("这条灵感的文件在 App 外被改过。") }
+            Button(L("载入新版本", "Load New Version")) { app.reload(); conflict = nil }
+        } message: { Text(L("这条灵感的文件在 App 外被改过。", "This idea's file was changed outside Sparkling.")) }
         .onChange(of: query) { _, _ in selectedID = nil; editingID = nil }
     }
 
@@ -148,7 +148,7 @@ struct LibraryView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Theme.textSecondary)
-                TextField("搜索全部 ⌘F", text: $query)
+                TextField(L("搜索全部 ⌘F", "Search All ⌘F"), text: $query)
                     .textFieldStyle(.plain)
                     .focused($searchFocused)
                     .onExitCommand { query = ""; searchFocused = false; listFocused = true }
@@ -164,28 +164,28 @@ struct LibraryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     // v2（design §11.3）：「全部灵感」「剪贴板」在最上，下面空 10 再是未归类和项目
-                    topRow("全部灵感", icon: "tray.full", count: app.library.ideas.count, item: .all)
-                    topRow("剪贴板", icon: "doc.on.clipboard", count: app.clipboard.items.count, item: .clipboard)
+                    topRow(L("全部灵感", "All Ideas"), icon: "tray.full", count: app.library.ideas.count, item: .all)
+                    topRow(L("剪贴板", "Clipboard"), icon: "doc.on.clipboard", count: app.clipboard.items.count, item: .clipboard)
                     Color.clear.frame(height: 10)
                     sidebarRow(app.library.inbox, item: .inbox)
                         .contextMenu {
-                            Button("在 Finder 中显示") { reveal(app.root.appendingPathComponent(LibraryStore.inboxFolder)) }
+                            Button(L("在 Finder 中显示", "Show in Finder")) { reveal(app.root.appendingPathComponent(LibraryStore.inboxFolder)) }
                         }
                     HStack {
-                        Text("项目").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+                        Text(L("项目", "Projects")).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary)
                         Spacer()
                         Button { repoSheet = .create } label: { Image(systemName: "plus").font(.system(size: 12, weight: .semibold)) }
-                            .buttonStyle(.plain).foregroundStyle(Theme.textSecondary).help("新建项目 ⌘N")
+                            .buttonStyle(.plain).foregroundStyle(Theme.textSecondary).help(L("新建项目 ⌘N", "New Project ⌘N"))
                     }
                     .padding(.horizontal, 10).padding(.top, 14).padding(.bottom, 4)
                     ForEach(app.library.repos) { repo in
                         sidebarRow(repo, item: .repo(repo.id))
                             .contextMenu {
-                                Button("项目设置…  ⌘I") { repoSheet = .edit(repo) }
-                                Button("在 Finder 中显示") { reveal(app.root.appendingPathComponent(repo.folder)) }
-                                Button("新建项目…  ⌘N") { repoSheet = .create }
+                                Button(L("项目设置…  ⌘I", "Project Settings…  ⌘I")) { repoSheet = .edit(repo) }
+                                Button(L("在 Finder 中显示", "Show in Finder")) { reveal(app.root.appendingPathComponent(repo.folder)) }
+                                Button(L("新建项目…  ⌘N", "New Project…  ⌘N")) { repoSheet = .create }
                                 Divider()
-                                Button("删除项目…", role: .destructive) { deletingRepo = repo }
+                                Button(L("删除项目…", "Delete Project…"), role: .destructive) { deletingRepo = repo }
                             }
                     }
                 }
@@ -265,13 +265,13 @@ struct LibraryView: View {
                         if !isSearching && !showingAll && renamingID == currentRepo.id {
                             renameField(size: 22, weight: .bold)
                         } else {
-                            Text(isSearching ? "搜索「\(query)」" : showingAll ? "全部灵感" : currentRepo.displayName)
+                            Text(isSearching ? L("搜索「\(query)」", "Results for “\(query)”") : showingAll ? L("全部灵感", "All Ideas") : currentRepo.displayName)
                                 .font(.system(size: 22, weight: .bold)).kerning(-0.22).lineSpacing(6)
                                 .foregroundStyle(Theme.textPrimary).lineLimit(1)
                                 .onTapGesture(count: 2) { if !isSearching && !showingAll { startRename(currentRepo, inTitle: true) } }
                         }
                         Spacer()
-                        Text("\(listedIdeas.count) 条").font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.textSecondary)
+                        Text(Plural.ideas(listedIdeas.count)).font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.textSecondary)
                     }
                     .frame(minHeight: 28)
                     .overlay(alignment: .bottomLeading) {
@@ -359,12 +359,12 @@ struct LibraryView: View {
                     if isDoubleClick { selectedID = idea.id; editingID = idea.id } else { endEditing(); selectedID = idea.id; listFocused = true }
                 }
                 .contextMenu {
-                    Button("编辑  ⏎") { selectedID = idea.id; editingID = idea.id }
-                    Button("移动到…  ⌘M") { selectedID = idea.id; movingID = idea.id }
-                    Button("在 Finder 中显示") { reveal(idea.url) }
-                    Button("拷贝内容  ⌘C") { copy(idea) }
+                    Button(L("编辑  ⏎", "Edit  ⏎")) { selectedID = idea.id; editingID = idea.id }
+                    Button(L("移动到…  ⌘M", "Move to…  ⌘M")) { selectedID = idea.id; movingID = idea.id }
+                    Button(L("在 Finder 中显示", "Show in Finder")) { reveal(idea.url) }
+                    Button(L("拷贝内容  ⌘C", "Copy Text  ⌘C")) { copy(idea) }
                     Divider()
-                    Button("删除  ⌘⌫") { trash(idea) }
+                    Button(L("删除  ⌘⌫", "Delete  ⌘⌫")) { trash(idea) }
                 }
             }
         }
@@ -422,20 +422,26 @@ struct LibraryView: View {
         return Text(attr)
     }
 
+    var emptyHint: String {
+        let hk = HotkeyCenter.shared.current?.display ?? Hotkey.load().display
+        if showingAll { return L("按 \(hk) 记一条，就会出现在这里", "Press \(hk) to jot one down — it'll show up here") }
+        return L("按 \(hk) 记一条，选「\(currentRepo.displayName)」就装进这里", "Press \(hk) to jot one down — pick “\(currentRepo.displayName)” to tuck it here")
+    }
+
     @ViewBuilder var emptyState: some View {
         if isSearching {
             VStack(spacing: 8) {
                 Image(systemName: "cloud.rain").font(.system(size: 36)).foregroundStyle(Theme.textTertiary)
-                Text("没有找到「\(query)」").font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textSecondary)
+                Text(L("没有找到「\(query)」", "No results for “\(query)”")).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textSecondary)
             }
         } else {
             VStack(spacing: 0) {
                 EmptyCup().frame(width: 64)
-                Text(currentRepo.isInbox && !showingAll ? "还空着 ✓" : "还空着")
+                Text(currentRepo.isInbox && !showingAll ? L("还空着 ✓", "Nothing here yet ✓") : L("还空着", "Nothing here yet"))
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
                     .padding(.top, 16)
                 if !currentRepo.isInbox || showingAll {
-                    Text(showingAll ? "按 \(HotkeyCenter.shared.current?.display ?? Hotkey.load().display) 记一条，就会出现在这里" : "按 \(HotkeyCenter.shared.current?.display ?? Hotkey.load().display) 记一条，选「\(currentRepo.displayName)」就装进这里")
+                    Text(emptyHint)
                         .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                         .padding(.top, 6)
                 }
@@ -510,7 +516,7 @@ struct LibraryView: View {
                 if sidebar == .repo(id) { sidebar = .repo(updated.id) }
                 log.info("renamed \(repo.folder, privacy: .public) → \(updated.folder, privacy: .public)")
             } catch {
-                showToast("改名失败：\(error.localizedDescription)，已恢复原名")
+                showToast(L("改名失败：\(error.localizedDescription)，已恢复原名", "Couldn't rename: \(error.localizedDescription). Restored the old name."))
             }
         }
     }
@@ -555,8 +561,8 @@ struct LibraryView: View {
             undo = .moved(moved, from: from)
             editingID = nil
             selectedID = isSearching ? moved.id : next
-            showToast("已移到 \(target.displayName) · ⌘Z 撤销")
-        } catch { errorAlert = "移动失败：\(error.localizedDescription)" }
+            showToast(L("已移到 \(target.displayName) · ⌘Z 撤销", "Moved to \(target.displayName) · ⌘Z Undo"))
+        } catch { errorAlert = L("移动失败：", "Couldn't move: ") + error.localizedDescription }
     }
 
     func trash(_ idea: Idea) {
@@ -568,8 +574,8 @@ struct LibraryView: View {
             editingID = nil
             selectedID = next
             listFocused = true
-            showToast("已移到废纸篓 · ⌘Z 撤销")
-        } catch { errorAlert = "删除失败：\(error.localizedDescription)" }
+            showToast(L("已移到废纸篓 · ⌘Z 撤销", "Moved to Trash · ⌘Z Undo"))
+        } catch { errorAlert = L("删除失败：", "Couldn't delete: ") + error.localizedDescription }
     }
 
     /// 删除 / 移走后选中下一条（没有就上一条）
@@ -589,20 +595,20 @@ struct LibraryView: View {
                 let back = try app.store.moveIdea(idea, to: from)
                 app.replace(idea, with: back)
                 selectedID = back.id
-                showToast("已撤销移动")
+                showToast(L("已撤销移动", "Move undone"))
             case let .trashed(trashURL, original):
                 try app.store.restore(from: trashURL, to: original.url)
                 app.reload()
                 selectedID = original.id
-                showToast("已从废纸篓放回")
+                showToast(L("已从废纸篓放回", "Restored from Trash"))
             }
-        } catch { errorAlert = "撤销失败：\(error.localizedDescription)" }
+        } catch { errorAlert = L("撤销失败：", "Couldn't undo: ") + error.localizedDescription }
     }
 
     func copy(_ idea: Idea) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(idea.body, forType: .string)
-        showToast("已拷贝")
+        showToast(L("已拷贝", "Copied"))
     }
 
     func deleteRepo(_ repo: Repo) {
@@ -611,8 +617,8 @@ struct LibraryView: View {
             let n = try app.store.deleteRepo(repo)
             app.reload()
             sidebar = .inbox
-            showToast("已删除「\(repo.displayName)」，\(n) 条灵感移到未归类")
-        } catch { errorAlert = "删除项目失败：\(error.localizedDescription)" }
+            showToast(L("已删除「\(repo.displayName)」，\(n) 条灵感移到未归类", "Deleted “\(repo.displayName)” · \(n == 1 ? "1 idea" : "\(n) ideas") moved to Unsorted"))
+        } catch { errorAlert = L("删除项目失败：", "Couldn't delete the project: ") + error.localizedDescription }
     }
 
     func reveal(_ url: URL) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
@@ -712,8 +718,8 @@ struct EditCard: View {
             // D17：编辑态不显示「已自动保存 · Esc 收起」之类提示，只留按钮
             HStack(spacing: 8) {
                 Spacer()
-                Button("移动到…  ⌘M") { commitOnExit(); onMove() }.buttonStyle(CardButton())
-                Button("删除  ⌘⌫") { saveTask?.cancel(); onTrash() }.buttonStyle(CardButton(danger: true))
+                Button(L("移动到…  ⌘M", "Move to…  ⌘M")) { commitOnExit(); onMove() }.buttonStyle(CardButton())
+                Button(L("删除  ⌘⌫", "Delete  ⌘⌫")) { saveTask?.cancel(); onTrash() }.buttonStyle(CardButton(danger: true))
             }
             .padding(.leading, 60)
         }
@@ -805,30 +811,30 @@ struct RepoSheet: View {
             HStack(spacing: 8) {
                 if let r = editing {
                     RepoMarker(repo: r, size: 10)
-                    Text("项目设置 · \(r.displayName)")
+                    Text(L("项目设置 · ", "Project Settings · ") + r.displayName)
                 } else {
-                    Text("新建项目")
+                    Text(L("新建项目", "New Project"))
                 }
             }
             .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
 
-            formRow("名称", error: nameError, hint: nil) { input($name, tag: 0, placeholder: "必填") }
-            formRow("短码", error: shortcodeError, hint: "输入 @\(shortcode.isEmpty ? "短码" : shortcode) 直接存到这里") {
-                input($shortcode, tag: 1, placeholder: "自动生成").frame(width: 160)
+            formRow(L("名称", "Name"), error: nameError, hint: nil) { input($name, tag: 0, placeholder: L("必填", "Required")) }
+            formRow(L("短码", "Short name"), error: shortcodeError, hint: L("输入 @\(shortcode.isEmpty ? "短码" : shortcode) 直接存到这里", "Type @\(shortcode.isEmpty ? "short name" : shortcode) to tuck ideas here")) {
+                input($shortcode, tag: 1, placeholder: L("自动生成", "Auto: from the name")).frame(width: 160)
             }
-            formRow("描述", error: nil, hint: "给自己看的一两句说明") { input($desc, tag: 2, placeholder: "", axis: .vertical) }
+            formRow(L("描述", "Description"), error: nil, hint: L("给自己看的一两句说明", "A line or two, just for you")) { input($desc, tag: 2, placeholder: "", axis: .vertical) }
 
             HStack(spacing: 8) {
                 if let r = editing {
-                    Button("删除项目…") { onDelete(r) }.buttonStyle(DangerButton())
+                    Button(L("删除项目…", "Delete Project…")) { onDelete(r) }.buttonStyle(DangerButton())
                     Spacer()
-                    Button("在 Finder 中显示") { NSWorkspace.shared.activateFileViewerSelecting([app.root.appendingPathComponent(r.folder)]) }
+                    Button(L("在 Finder 中显示", "Show in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([app.root.appendingPathComponent(r.folder)]) }
                         .buttonStyle(SecondaryButton())
-                    Button("完成") { finish() }.buttonStyle(PrimaryButton()).keyboardShortcut(.defaultAction)
+                    Button(L("完成", "Done")) { finish() }.buttonStyle(PrimaryButton()).keyboardShortcut(.defaultAction)
                 } else {
                     Spacer()
-                    Button("取消") { onClose(nil) }.buttonStyle(SecondaryButton())
-                    Button("创建") { finish() }.buttonStyle(PrimaryButton()).keyboardShortcut(.defaultAction)
+                    Button(L("取消", "Cancel")) { onClose(nil) }.buttonStyle(SecondaryButton())
+                    Button(L("创建", "Create")) { finish() }.buttonStyle(PrimaryButton()).keyboardShortcut(.defaultAction)
                 }
             }
             .padding(.top, 4)
@@ -852,7 +858,7 @@ struct RepoSheet: View {
     func formRow<C: View>(_ label: String, error: String?, hint: String?, @ViewBuilder content: () -> C) -> some View {
         HStack(alignment: .top, spacing: 16) {
             Text(label).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textSecondary)
-                .frame(width: 48, alignment: .leading).padding(.top, 9)
+                .frame(width: 96, alignment: .leading).padding(.top, 9)
             VStack(alignment: .leading, spacing: 4) {
                 content()
                 if let error { Text(error).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.danger) }
@@ -881,11 +887,11 @@ struct RepoSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if let p = FileNamer.repoNameProblem(trimmed) { nameError = p }
         else if app.library.repos.contains(where: { $0.id != editing?.id && $0.folder.compare(trimmed, options: .caseInsensitive) == .orderedSame }) {
-            nameError = "已经有叫「\(trimmed)」的项目"
+            nameError = L("已经有叫「\(trimmed)」的项目", "“\(trimmed)” already exists")
         }
         let sc = shortcode.trimmingCharacters(in: .whitespaces).lowercased()
         if !sc.isEmpty, let other = app.library.repos.first(where: { $0.id != editing?.id && $0.shortcode.lowercased() == sc }) {
-            shortcodeError = "已被 \(other.displayName) 使用"
+            shortcodeError = L("已被 \(other.displayName) 使用", "Already used by \(other.displayName)")
         }
         return nameError == nil && shortcodeError == nil
     }
@@ -940,7 +946,7 @@ struct MovePicker: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Theme.textSecondary)
-                TextField("移动到…", text: $filter).textFieldStyle(.plain).focused($focused)
+                TextField(L("移动到…", "Move to…"), text: $filter).textFieldStyle(.plain).focused($focused)
                     .onSubmit { pick(highlight) }
                     .onKeyPress(.upArrow) { highlight = max(0, highlight - 1); return .handled }
                     .onKeyPress(.downArrow) { highlight = min(items.count - 1, highlight + 1); return .handled }
@@ -953,7 +959,7 @@ struct MovePicker: View {
                 let isCurrent = repo.folder == idea.repoFolder
                 HStack(spacing: 8) {
                     RepoMarker(repo: repo, size: 10)
-                    Text(repo.displayName + (isCurrent ? "（当前）" : "")).lineLimit(1)
+                    Text(repo.displayName + (isCurrent ? L("（当前）", " (current)") : "")).lineLimit(1)
                     Spacer()
                     if let n = shortcutNumber(repo) { Text("⌘\(n)").font(.system(size: 11, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.textSecondary) }
                 }

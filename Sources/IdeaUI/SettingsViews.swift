@@ -26,6 +26,26 @@ public final class SettingsModel {
     func isRecording(_ slot: HotkeySlot) -> Bool { slot == .capture ? recording : recordingClip }
     func setRecording(_ slot: HotkeySlot, _ on: Bool) { if slot == .capture { recording = on } else { recordingClip = on } }
 
+    /// 语言设置（重启生效）；启动时实际用的语言是 Lang.current
+    var language = Lang.loadSetting()
+    /// 实际显示语言会变才提示重启（如系统是中文时「跟随系统」↔「中文」不用重启）
+    var languageNeedsRestart: Bool { Lang.resolve(language) != Lang.current }
+
+    func setLanguage(_ s: Lang.Setting) {
+        language = s
+        Lang.saveSetting(s)
+    }
+
+    /// 立即重启：拉起一个新的自己再退出
+    static func relaunch() {
+        let path = Bundle.main.bundlePath
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", "sleep 0.6; /usr/bin/open \"$0\"", path]
+        try? p.run()
+        NSApp.terminate(nil)
+    }
+
     public init() { refreshLaunchState() }
 
     /// 录到新快捷键：先试注册，失败则恢复旧的并提示（D9）
@@ -55,7 +75,7 @@ public final class SettingsModel {
             log.info("launch at login \(on ? "on" : "off") status=\(SMAppService.mainApp.status.rawValue)")
         } catch {
             log.error("launch at login failed \(error.localizedDescription, privacy: .public)")
-            launchError = "设置失败：\(error.localizedDescription)"
+            launchError = L("设置失败：", "Couldn't change this: ") + error.localizedDescription
         }
         UserDefaults.standard.set(true, forKey: "launchAtLoginChosen")
         refreshLaunchState()
@@ -115,7 +135,7 @@ struct HotkeyRecorder: NSViewRepresentable {
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general, clipboard
     var id: String { rawValue }
-    var title: String { self == .general ? "通用" : "剪贴板" }
+    var title: String { self == .general ? L("通用", "General") : L("剪贴板", "Clipboard") }
     var icon: String { self == .general ? "gearshape" : "doc.on.clipboard" }
 }
 
@@ -148,7 +168,7 @@ struct SettingsView: View {
             .background(Theme.block)
             if tab == .general { generalPage } else { ClipboardSettingsPage(model: model, clip: app.clipboard) }
         }
-        .frame(width: 540, alignment: .top)
+        .frame(width: SettingsLayout.width, alignment: .top)
         .background(Theme.canvas)
         .onChange(of: model.focusRecorder) { _, on in if on { tab = .general } }
         .onAppear { if model.focusRecorder { tab = .general } }
@@ -156,14 +176,15 @@ struct SettingsView: View {
 
     var generalPage: some View {
         VStack(alignment: .leading, spacing: 18) {
-            row("配色") { palettePicker }
-            row("底纹") { texturePicker }
-            row("呼出快捷键") {
+            row(L("语言", "Language")) { languagePicker }
+            row(L("配色", "Theme")) { palettePicker }
+            row(L("底纹", "Background")) { texturePicker }
+            row(L("呼出快捷键", "Capture shortcut")) {
                 VStack(alignment: .leading, spacing: 4) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 10).fill(Theme.block)
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(model.recording ? Theme.accent : .clear, lineWidth: 2))
-                        Text(model.recording ? "请按下新的组合键…（Esc 取消）" : model.hotkey.display)
+                        Text(model.recording ? L("请按下新的组合键…（Esc 取消）", "Press a new shortcut… (Esc to cancel)") : model.hotkey.display)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(model.recording ? Theme.textSecondary : Theme.textPrimary)
                         HotkeyRecorder(model: model, slot: .capture)
@@ -172,26 +193,26 @@ struct SettingsView: View {
                     if let e = model.hotkeyError {
                         Text(e).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.danger)
                     } else {
-                        Text("需包含 ⌘ / ⌥ / ⌃ 之一。若按下没反应，可能被别的 App 占用，请换一个。")
+                        Text(L("需包含 ⌘ / ⌥ / ⌃ 之一。若按下没反应，可能被别的 App 占用，请换一个。", "Must include ⌘, ⌥ or ⌃. If nothing happens when you press it, another app may be using it — try another."))
                             .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
                     }
                 }
             }
-            row("存储位置") {
+            row(L("存储位置", "Storage location")) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(app.root.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
                         .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textPrimary)
                         .lineLimit(2).textSelection(.enabled)
                     if app.rootIsFromEnv {
-                        Text("当前由环境变量 SPARKLING_ROOT 指定（开发模式）").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                        Text(L("当前由环境变量 SPARKLING_ROOT 指定（开发模式）", "Set by the SPARKLING_ROOT environment variable (developer mode)")).font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
                     }
                     HStack {
-                        Button("选择…") { chooseRoot() }.buttonStyle(SecondaryButton())
-                        Button("在 Finder 中显示") { NSWorkspace.shared.activateFileViewerSelecting([app.root]) }.buttonStyle(SecondaryButton())
+                        Button(L("选择…", "Choose…")) { chooseRoot() }.buttonStyle(SecondaryButton())
+                        Button(L("在 Finder 中显示", "Show in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([app.root]) }.buttonStyle(SecondaryButton())
                     }
                 }
             }
-            row("开机自启") {
+            row(L("开机自启", "Open at login")) {
                 VStack(alignment: .leading, spacing: 4) {
                     Toggle("", isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
                         .toggleStyle(.switch).labelsHidden()
@@ -203,12 +224,12 @@ struct SettingsView: View {
             Spacer(minLength: 0)
         }
         .padding(24)
-        .frame(width: 540, alignment: .leading)
+        .frame(width: SettingsLayout.width, alignment: .leading)
         .onAppear { model.refreshLaunchState() }
-        .confirmationDialog("更换存储位置", isPresented: Binding(get: { pendingRoot != nil }, set: { if !$0 { pendingRoot = nil } })) {
-            Button("把现有灵感一起搬过去") { applyRoot(move: true) }
-            Button("只换位置") { applyRoot(move: false) }
-            Button("取消", role: .cancel) { pendingRoot = nil }
+        .confirmationDialog(L("更换存储位置", "Change Storage Location"), isPresented: Binding(get: { pendingRoot != nil }, set: { if !$0 { pendingRoot = nil } })) {
+            Button(L("把现有灵感一起搬过去", "Move Everything")) { applyRoot(move: true) }
+            Button(L("只换位置", "Just Change Location")) { applyRoot(move: false) }
+            Button(L("取消", "Cancel"), role: .cancel) { pendingRoot = nil }
         } message: {
             Text(pendingRoot?.path ?? "")
         }
@@ -217,8 +238,32 @@ struct SettingsView: View {
     func row<C: View>(_ label: String, @ViewBuilder content: () -> C) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text(label).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textSecondary)
-                .frame(width: 80, alignment: .leading).padding(.top, 6)
+                .fixedSize(horizontal: false, vertical: true).lineLimit(2)
+                .frame(width: SettingsLayout.labelWidth, alignment: .topLeading).padding(.top, 6)
             content()
+        }
+    }
+
+    /// 语言：跟随系统 / 中文 / English（design §12.1）；切换后提示重启
+    var languagePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("", selection: Binding(get: { model.language }, set: { model.setLanguage($0) })) {
+                Text(L("跟随系统", "System")).tag(Lang.Setting.system)
+                Text("中文").tag(Lang.Setting.zh)
+                Text("English").tag(Lang.Setting.en)
+            }
+            .pickerStyle(.segmented).labelsHidden().frame(width: 260)
+            if model.languageNeedsRestart {
+                HStack(spacing: 10) {
+                    Text(L("重启 Sparkling 后生效", "Takes effect after restarting Sparkling."))
+                        .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.c(0x6B5532))
+                    Spacer(minLength: 8)
+                    Button(L("立即重启", "Restart Now")) { SettingsModel.relaunch() }.buttonStyle(PrimaryButton())
+                }
+                .padding(.leading, 12).padding(.trailing, 6).padding(.vertical, 6)
+                .background(Theme.c(0xFBF1DC), in: RoundedRectangle(cornerRadius: 10))
+                .frame(maxWidth: 400)
+            }
         }
     }
 
@@ -246,7 +291,7 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { app.palette = p }
                 .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
-                .accessibilityLabel("配色：\(p.title)")
+                .accessibilityLabel(L("配色：", "Theme: ") + p.title)
             }
         }
     }
@@ -269,7 +314,7 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { app.texture = t }
                 .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
-                .accessibilityLabel("底纹：\(t.title)")
+                .accessibilityLabel(L("底纹：", "Background: ") + t.title)
             }
         }
     }
@@ -279,7 +324,7 @@ struct SettingsView: View {
         p.canChooseDirectories = true
         p.canChooseFiles = false
         p.canCreateDirectories = true
-        p.prompt = "选择"
+        p.prompt = L("选择", "Choose")
         p.directoryURL = app.root.deletingLastPathComponent()
         if p.runModal() == .OK, let url = p.url, url.standardizedFileURL != app.root { pendingRoot = url }
     }
@@ -290,10 +335,10 @@ struct SettingsView: View {
         do {
             let skipped = try app.setRoot(url, moveExisting: move)
             if !skipped.isEmpty {
-                let a = NSAlert(); a.messageText = "有 \(skipped.count) 项没能搬走"; a.informativeText = skipped.prefix(10).joined(separator: "\n"); a.runModal()
+                let a = NSAlert(); a.messageText = L("有 \(skipped.count) 项没能搬走", "\(skipped.count) \(skipped.count == 1 ? "item" : "items") couldn't be moved"); a.informativeText = skipped.prefix(10).joined(separator: "\n"); a.runModal()
             }
         } catch {
-            let a = NSAlert(); a.messageText = "换位置失败"; a.informativeText = error.localizedDescription; a.runModal()
+            let a = NSAlert(); a.messageText = L("换位置失败", "Couldn't change location"); a.informativeText = error.localizedDescription; a.runModal()
         }
     }
 }
@@ -341,26 +386,26 @@ struct OnboardingView: View {
             HStack {
                 Text("Sparkling Lab").font(.system(size: 10, weight: .semibold)).kerning(0.8)
                 Spacer()
-                Text("灵感研究所").font(.system(size: 10, weight: .semibold)).kerning(0.8)
+                Text(L("灵感研究所", "IDEA LAB")).font(.system(size: 10, weight: .semibold)).kerning(0.8)
             }.foregroundStyle(Theme.textTertiary)
 
-            Text("随时记下灵感，顺手放进对的项目").font(.system(size: 26, weight: .bold)).foregroundStyle(Theme.textPrimary)
+            Text(L("随时记下灵感，顺手放进对的项目", "Jot anything down — and drop it in the right project")).font(.system(size: 26, weight: .bold)).foregroundStyle(Theme.textPrimary)
 
-            step(1, "灵感存在哪") {
+            step(1, L("灵感存在哪", "Where your ideas live")) {
                 HStack {
                     Text(app.root.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
                         .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textPrimary).lineLimit(1)
                     Spacer()
-                    Button("换位置…") {
+                    Button(L("换位置…", "Change…")) {
                         let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false; p.canCreateDirectories = true
                         if p.runModal() == .OK, let u = p.url { try? app.setRoot(u, moveExisting: false) }
                     }.buttonStyle(SecondaryButton())
                 }
             }
-            step(2, "建 1–3 个项目（只填名称，可跳过）") {
+            step(2, L("建 1–3 个项目（只填名称，可跳过）", "Create 1–3 projects (just a name, optional)")) {
                 VStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { i in
-                        TextField("项目名称，如「播放器重构」", text: $names[i])
+                        TextField(L("项目名称，如「播放器重构」", "Project name, e.g. “Checkout Revamp”"), text: $names[i])
                             .textFieldStyle(.plain).font(.system(size: 13, weight: .medium))
                             .padding(.horizontal, 10).frame(height: 32)
                             .background(Theme.block, in: RoundedRectangle(cornerRadius: 10))
@@ -368,16 +413,16 @@ struct OnboardingView: View {
                     if let error { Text(error).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.danger).frame(maxWidth: .infinity, alignment: .leading) }
                 }
             }
-            step(3, "按 \(settings.hotkey.display) 试记一条") {
-                Text("在任何 App 里按下快捷键，输入后回车。没选项目就装进未归类。")
+            step(3, L("按 \(settings.hotkey.display) 试记一条", "Press \(settings.hotkey.display) and jot one down")) {
+                Text(L("在任何 App 里按下快捷键，输入后回车。没选项目就装进未归类。", "Press the shortcut in any app, write a line, hit ⏎. Without a project it goes to Unsorted."))
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
             }
             Spacer(minLength: 0)
             HStack {
                 Text("Since 2026").font(.system(size: 10, weight: .semibold)).kerning(0.8).foregroundStyle(Theme.textTertiary)
                 Spacer()
-                Button("跳过") { done() }.buttonStyle(SecondaryButton())
-                Button("开始使用") { finish() }.buttonStyle(PrimaryButton()).keyboardShortcut(.defaultAction)
+                Button(L("跳过", "Skip")) { done() }.buttonStyle(SecondaryButton())
+                Button(L("开始使用", "Get Started")) { finish() }.buttonStyle(PrimaryButton()).keyboardShortcut(.defaultAction)
             }
         }
         .padding(28)
@@ -399,7 +444,7 @@ struct OnboardingView: View {
     func finish() {
         for n in names.map({ $0.trimmingCharacters(in: .whitespaces) }) where !n.isEmpty {
             do { try app.store.createRepo(name: n, in: app.library); app.reload() }
-            catch { self.error = "「\(n)」：\(error.localizedDescription)"; return }
+            catch { self.error = Q(n) + L("：", ": ") + error.localizedDescription; return }
         }
         done()
     }
@@ -456,13 +501,13 @@ struct ClipboardSettingsPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            row("记录剪贴板") {
+            row(L("记录剪贴板", "Record clipboard")) {
                 VStack(alignment: .leading, spacing: 4) {
                     Toggle("", isOn: $clip.enabled).toggleStyle(.switch).labelsHidden()
-                    note("只存在这台 Mac 上，不上传；密码管理器等标记为敏感的内容一律跳过")
+                    note(L("只存在这台 Mac 上，不上传；密码管理器等标记为敏感的内容一律跳过", "Stays on this Mac, never uploaded. Items marked sensitive (like passwords) are always skipped."))
                 }
             }
-            row("保存条数") {
+            row(L("保存条数", "Keep last")) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 0) {
                         stepButton("minus") { setLimit(clip.limit - ClipboardStore.limitStep) }
@@ -474,33 +519,33 @@ struct ClipboardSettingsPage: View {
                         stepButton("plus") { setLimit(clip.limit + ClipboardStore.limitStep) }
                     }
                     .background(Theme.block, in: RoundedRectangle(cornerRadius: 9))
-                    note("超过就自动删最早的（10–500）")
+                    note(L("超过就自动删最早的（10–500）", "items (10–500) · Older items are removed automatically"))
                 }
             }
-            row("剪贴板快捷键") {
+            row(L("剪贴板快捷键", "Clipboard shortcut")) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 10).fill(Theme.block)
                                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(model.recordingClip ? Theme.accent : (model.clipHotkeyError != nil ? Theme.danger : .clear), lineWidth: 2))
-                            Text(model.recordingClip ? "请按下新的组合键…（Esc 取消）" : model.clipHotkey.display)
+                            Text(model.recordingClip ? L("请按下新的组合键…（Esc 取消）", "Press a new shortcut… (Esc to cancel)") : model.clipHotkey.display)
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(model.recordingClip ? Theme.textSecondary : Theme.textPrimary)
                             HotkeyRecorder(model: model, slot: .clipboard)
                         }
                         .frame(width: 220, height: 32)
-                        Button("恢复默认") { model.setHotkey(HotkeySlot.clipboard.defaultHotkey, slot: .clipboard) }
+                        Button(L("恢复默认", "Reset")) { model.setHotkey(HotkeySlot.clipboard.defaultHotkey, slot: .clipboard) }
                             .buttonStyle(SecondaryButton())
                             .disabled(model.clipHotkey == HotkeySlot.clipboard.defaultHotkey && model.clipHotkeyError == nil)
                     }
                     if let e = model.clipHotkeyError {
                         Text(e).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.danger)
                     } else {
-                        note("呼出剪贴板面板。不能和呼出快捷键相同。")
+                        note(L("呼出剪贴板面板。不能和呼出快捷键相同。", "Opens the clipboard panel. Must differ from the capture shortcut."))
                     }
                 }
             }
-            row("不记录这些 App") {
+            row(L("不记录这些 App", "Don't record these apps")) {
                 VStack(alignment: .leading, spacing: 0) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
@@ -537,14 +582,14 @@ struct ClipboardSettingsPage: View {
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.lineSoft, lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
-            row("清空历史") {
-                Button("清空剪贴板历史…") { confirmClear() }.buttonStyle(DangerButton())
+            row(L("清空历史", "Clear history")) {
+                Button(L("清空剪贴板历史…", "Clear Clipboard History…")) { confirmClear() }.buttonStyle(DangerButton())
                     .disabled(clip.items.isEmpty)
             }
             Spacer(minLength: 0)
         }
         .padding(24)
-        .frame(width: 540, alignment: .leading)
+        .frame(width: SettingsLayout.width, alignment: .leading)
         .onAppear { limitText = "\(clip.limit)" }
         .onChange(of: clip.limit) { _, n in limitText = "\(n)" }
     }
@@ -552,7 +597,8 @@ struct ClipboardSettingsPage: View {
     func row<C: View>(_ label: String, @ViewBuilder content: () -> C) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text(label).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textSecondary)
-                .frame(width: 96, alignment: .leading).padding(.top, 6)
+                .fixedSize(horizontal: false, vertical: true).lineLimit(2)
+                .frame(width: SettingsLayout.labelWidth, alignment: .topLeading).padding(.top, 6)
             content()
         }
     }
@@ -584,7 +630,7 @@ struct ClipboardSettingsPage: View {
         p.allowedContentTypes = [.application]
         p.directoryURL = URL(fileURLWithPath: "/Applications")
         p.allowsMultipleSelection = true
-        p.prompt = "不记录"
+        p.prompt = L("不记录", "Don't Record")
         guard p.runModal() == .OK else { return }
         for u in p.urls {
             guard let b = Bundle(url: u)?.bundleIdentifier, !clip.excluded.contains(b) else { continue }
@@ -599,4 +645,10 @@ struct ClipboardSettingsPage: View {
     }
 
     func confirmClear() { confirmClearClipboard(clip) }
+}
+
+/// 偏好设置尺寸（design §12.3：中英共用，宽 600、标签列 150、标签可换两行）
+enum SettingsLayout {
+    static let width: CGFloat = 600
+    static let labelWidth: CGFloat = 150
 }

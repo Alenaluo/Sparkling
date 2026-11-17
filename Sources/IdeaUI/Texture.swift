@@ -1,3 +1,4 @@
+import IdeaCore
 import AppKit
 import SwiftUI
 
@@ -9,11 +10,11 @@ public enum Texture: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .dots: return "点阵"
-        case .wave: return "刺绣波纹"
-        case .grid: return "点状方格"
-        case .ring: return "点点圆环"
-        case .none: return "无"
+        case .dots: return L("点阵", "Dots")
+        case .wave: return L("刺绣波纹", "Stitches")
+        case .grid: return L("点状方格", "Dot Grid")
+        case .ring: return L("点点圆环", "Dot Rings")
+        case .none: return L("无", "None")
         }
     }
 

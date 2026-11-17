@@ -10,7 +10,7 @@ final class ClipFilterField: NSTextField {
         f.drawsBackground = false
         f.focusRingType = .none
         f.font = .systemFont(ofSize: 13)
-        f.placeholderString = "输入筛选…"
+        f.placeholderString = L("输入筛选…", "Filter…")
         f.cell?.isScrollable = true
         f.cell?.wraps = false
         f.lineBreakMode = .byTruncatingTail

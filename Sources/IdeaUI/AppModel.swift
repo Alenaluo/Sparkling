@@ -43,14 +43,14 @@ public final class AppModel {
             library = try store.scan()
             loadError = nil
         } catch {
-            loadError = "找不到 Sparkling 文件夹"
+            loadError = L("找不到 Sparkling 文件夹", "Can't find the Sparkling folder")
         }
         log.info("scan \(self.library.ideas.count) ideas in \(Int((CFAbsoluteTimeGetCurrent() - t) * 1000))ms")
     }
 
     /// 只检查根目录是否可用（不重扫）
     public func checkRoot() {
-        loadError = store.rootIsWritable ? nil : "找不到 Sparkling 文件夹"
+        loadError = store.rootIsWritable ? nil : L("找不到 Sparkling 文件夹", "Can't find the Sparkling folder")
     }
 
     /// 换根目录；moveExisting 为 true 时把现有内容一起搬过去。返回没能搬走的项。

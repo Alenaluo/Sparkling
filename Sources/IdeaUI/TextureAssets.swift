@@ -1,3 +1,4 @@
+import IdeaCore
 // 由 docs/idea-notes/assets/textures/*.svg 生成，素材颜色 #37352F 在加载时换成主题正文色。
 // 重新生成：见 idea-notes/README.md「底纹素材」。
 

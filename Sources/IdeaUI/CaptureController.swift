@@ -242,7 +242,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
             if elapsed < 1.2, let front = NSWorkspace.shared.frontmostApplication,
                front.processIdentifier != frontAppAtShow?.processIdentifier,
                front.processIdentifier != ProcessInfo.processInfo.processIdentifier {
-                let name = front.localizedName ?? front.bundleIdentifier ?? "另一个 App"
+                let name = front.localizedName ?? front.bundleIdentifier ?? L("另一个 App", "another app")
                 log.error("panel lost focus \(Int(elapsed * 1000))ms after show to \(name, privacy: .public)")
                 onSuspectedConflict(name)
             }
@@ -526,7 +526,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
                 var asset: String?
                 if item.kind == .image {
                     guard let src = clipboard?.store.imageURL(item), FileManager.default.fileExists(atPath: src.path) else {
-                        throw LibraryError.notWritable("找不到这张图片")
+                        throw LibraryError.notWritable(L("找不到这张图片", "the image can't be found"))
                     }
                     asset = try app.store.copyAsset(from: src, to: repo, baseName: ClipMarkdown.nameHint(note: text, item: item))
                 }
@@ -547,7 +547,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
             showHUD(repo: repo, below: frame)
         } catch {
             log.error("save failed \(error.localizedDescription, privacy: .public)")
-            model.errorMessage = (error as? LocalizedError)?.errorDescription ?? "Sparkling 文件夹不可写"
+            model.errorMessage = (error as? LocalizedError)?.errorDescription ?? L("Sparkling 文件夹不可写", "the Sparkling folder isn't writable")
             relayout()
         }
     }
@@ -561,7 +561,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
         model.clip = item
         model.clipImage = item.kind == .image ? clipboard?.image(item) : nil
         model.clipDetail = item.kind == .files ? (clipboard?.fileDetail(item) ?? "") : ""
-        textView.placeholder = item.kind == .image ? "给这张图写一句…" : item.kind == .files ? "给这个文件写一句…" : IdeaTextView.defaultPlaceholder
+        textView.placeholder = item.kind == .image ? L("给这张图写一句…", "Add a note about this image…") : item.kind == .files ? L("给这个文件写一句…", "Add a note about this file…") : IdeaTextView.defaultPlaceholder
         draftText = item.kind == .text ? (item.text ?? "") : ""
         draftSelection = TagSelection()
         show()

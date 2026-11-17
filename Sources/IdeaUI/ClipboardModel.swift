@@ -167,7 +167,7 @@ public final class ClipboardModel {
         }
         switch bundleID {
         case "com.1password.1password": return "1Password"
-        case "com.apple.keychainaccess": return "钥匙串访问"
+        case "com.apple.keychainaccess": return L("钥匙串访问", "Keychain Access")
         default: return bundleID
         }
     }

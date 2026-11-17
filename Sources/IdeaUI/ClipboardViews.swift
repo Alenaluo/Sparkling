@@ -38,7 +38,7 @@ struct ClipPanelView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     filterBox
                     if !clip.enabled { PausedBanner(onResume: onResume) }
-                    Text(filtering ? "找到 \(shown.count) 条" : "剪贴板 · 最近 \(clip.items.count) 条")
+                    Text(filtering ? L("找到 \(shown.count) 条", "\(shown.count) found") : L("剪贴板 · 最近 \(clip.items.count) 条", "Clipboard · Last \(clip.items.count)"))
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary)
                         .padding(.horizontal, 4)
                 }
@@ -69,8 +69,8 @@ struct ClipPanelView: View {
     @ViewBuilder var list: some View {
         if shown.isEmpty {
             VStack(spacing: 6) {
-                Text("没有找到「\(model.query)」").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.textPrimary)
-                Text("筛选会查文字内容和文件名").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
+                Text(L("没有找到「\(model.query)」", "No results for “\(model.query)”")).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                Text(L("筛选会查文字内容和文件名", "Filter checks text and file names")).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -100,11 +100,11 @@ struct ClipPanelView: View {
 
     var footer: some View {
         HStack(spacing: 6) {
-            KeyCap("⏎", primary: true); hint("复制")
-            dot; KeyCap("⌘S"); hint("存成灵感")
-            dot; KeyCap("⌘⌫"); hint("删除")
+            KeyCap("⏎", primary: true); hint(L("复制", "Copy"))
+            dot; KeyCap("⌘S"); hint(L("存成灵感", "Save as Idea"))
+            dot; KeyCap("⌘⌫"); hint(L("删除", "Delete"))
             Spacer()
-            KeyCap("Esc"); hint("关闭")
+            KeyCap("Esc"); hint(L("关闭", "Close"))
         }
         .padding(.horizontal, 16)
         .frame(height: 40)
@@ -134,9 +134,9 @@ struct PausedBanner: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle().fill(Theme.c(0xE08A2E)).frame(width: 6, height: 6)
-            Text("剪贴板记录已暂停，新的复制不会出现").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.c(0x6B5532))
+            Text(L("剪贴板记录已暂停，新的复制不会出现", "Clipboard recording is paused")).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.c(0x6B5532))
             Spacer(minLength: 4)
-            Button("打开", action: onResume).buttonStyle(.plain)
+            Button(L("打开", "Resume"), action: onResume).buttonStyle(.plain)
                 .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
         }
         .padding(.horizontal, 12).frame(height: 30)
@@ -150,9 +150,9 @@ struct ClipEmptyView: View {
         VStack(spacing: 0) {
             EmptyClipboardArt().frame(width: 64, height: 76)
             Spacer().frame(height: 16)
-            Text("还空着").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+            Text(L("还空着", "Nothing here yet")).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
             Spacer().frame(height: 6)
-            Text("复制点什么，就会出现在这里").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
+            Text(L("复制点什么，就会出现在这里", "Copy something and it'll show up here")).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
         }
     }
 }
@@ -196,7 +196,7 @@ struct EmptyClipboardArt: View {
             heart.addCurve(to: p(47, 58), control1: p(51, 54.5), control2: p(49, 56.5))
             ctx.fill(heart, with: .color(Theme.textSecondary))
         }
-        .accessibilityLabel("空的剪贴板")
+        .accessibilityLabel(L("空的剪贴板", "Empty clipboard"))
     }
 }
 
@@ -230,7 +230,7 @@ struct ClipRow: View {
     @ViewBuilder var icon: some View {
         switch item.kind {
         case .text:
-            Text("文").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.textSecondary)
+            Text(L("文", "Aa")).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.textSecondary)
                 .frame(width: iconSize, height: iconSize)
                 .background(Theme.block, in: RoundedRectangle(cornerRadius: 7))
         case .image:
@@ -308,7 +308,7 @@ struct ClipAttachmentHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("来自剪贴板").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+            Text(L("来自剪贴板", "From Clipboard")).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary)
                 .padding(.horizontal, 8).frame(height: 20)
                 .background(Theme.block, in: RoundedRectangle(cornerRadius: 6))
             switch item.kind {
@@ -380,7 +380,7 @@ struct FileCard: View {
     /// 「位置 · 大小」；文件已不在原处时写「找不到原文件」
     static func detail(_ path: String) -> String {
         let dir = ((path as NSString).deletingLastPathComponent as NSString).lastPathComponent
-        guard let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? NSNumber)?.int64Value else { return "找不到原文件" }
+        guard let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? NSNumber)?.int64Value else { return L("找不到原文件", "Original file not found") }
         return "\(dir) · \(ClipTime.size(size))"
     }
 }
@@ -472,21 +472,21 @@ struct ClipboardPage: View {
 
     var header: some View {
         HStack(alignment: .center, spacing: 12) {
-            Text("剪贴板").font(.system(size: 22, weight: .bold)).kerning(-0.22).foregroundStyle(Theme.textPrimary)
-            Text("最近 \(clip.items.count) 条 · 只存在这台 Mac 上").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
+            Text(L("剪贴板", "Clipboard")).font(.system(size: 22, weight: .bold)).kerning(-0.22).foregroundStyle(Theme.textPrimary)
+            Text(L("最近 \(clip.items.count) 条 · 只存在这台 Mac 上", "Last \(clip.items.count) · stored only on this Mac")).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)
             Spacer(minLength: 8)
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                TextField("筛选", text: $query).textFieldStyle(.plain).font(.system(size: 12, weight: .medium))
+                TextField(L("筛选…", "Filter…"), text: $query).textFieldStyle(.plain).font(.system(size: 12, weight: .medium))
                     .onExitCommand { query = "" }
             }
             .padding(.horizontal, 10).frame(width: 160, height: 28)
             .background(Theme.block, in: RoundedRectangle(cornerRadius: 9))
-            Button(clip.enabled ? "暂停记录" : "继续记录") { clip.enabled.toggle() }
+            Button(clip.enabled ? L("暂停记录", "Pause") : L("继续记录", "Resume")) { clip.enabled.toggle() }
                 .buttonStyle(GhostButton())
             // 用户 11-18 要求：清空也放在这里（同偏好设置，二次确认）
-            Button("清空") { confirmClearClipboard(clip) }
+            Button(L("清空", "Clear")) { confirmClearClipboard(clip) }
                 .buttonStyle(GhostButton(danger: true))
                 .disabled(clip.items.isEmpty)
         }
@@ -499,9 +499,9 @@ struct ClipboardPage: View {
             ClipRow(item: item, clip: clip, query: query, selected: false, large: true)
             if on {
                 HStack(spacing: 6) {
-                    Button("复制 ⏎") { clip.copy(item) }.buttonStyle(SmallButton())
-                    Button("存成灵感 ⌘S") { onSaveAsIdea(item) }.buttonStyle(SmallButton())
-                    Button("删除") { delete(item) }.buttonStyle(SmallButton(danger: true))
+                    Button(L("复制 ⏎", "Copy ⏎")) { clip.copy(item) }.buttonStyle(SmallButton())
+                    Button(L("存成灵感 ⌘S", "Save as Idea ⌘S")) { onSaveAsIdea(item) }.buttonStyle(SmallButton())
+                    Button(L("删除", "Delete")) { delete(item) }.buttonStyle(SmallButton(danger: true))
                 }
                 .padding(.trailing, 12)
             }
@@ -514,8 +514,8 @@ struct ClipboardPage: View {
     @ViewBuilder var empty: some View {
         if !query.trimmingCharacters(in: .whitespaces).isEmpty {
             VStack(spacing: 6) {
-                Text("没有找到「\(query)」").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.textPrimary)
-                Text("筛选会查文字内容和文件名").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
+                Text(L("没有找到「\(query)」", "No results for “\(query)”")).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                Text(L("筛选会查文字内容和文件名", "Filter checks text and file names")).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
             }
         } else {
             ClipEmptyView()
@@ -583,13 +583,13 @@ struct AttachmentCards: View {
                 let img = IdeaImageCache.image(url)
                 ImageCard(image: img, sizeText: img.map(IdeaImageCache.pixelSize) ?? "")
                     .contentShape(Rectangle())
-                    .contextMenu { Button("打开图片") { NSWorkspace.shared.open(url) } }
+                    .contextMenu { Button(L("打开图片", "Open Image")) { NSWorkspace.shared.open(url) } }
             }
             ForEach(att.files, id: \.path) { f in
                 FileCard(path: f.path, name: f.name, detail: FileCard.detail(f.path))
                     .contextMenu {
-                        Button("打开文件") { NSWorkspace.shared.open(URL(fileURLWithPath: f.path)) }
-                        Button("在 Finder 中显示") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: f.path)]) }
+                        Button(L("打开文件", "Open File")) { NSWorkspace.shared.open(URL(fileURLWithPath: f.path)) }
+                        Button(L("在 Finder 中显示", "Show in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: f.path)]) }
                     }
             }
         }
@@ -600,10 +600,10 @@ struct AttachmentCards: View {
 @MainActor
 func confirmClearClipboard(_ clip: ClipboardModel) {
     let a = NSAlert()
-    a.messageText = "清空全部 \(clip.items.count) 条剪贴板记录？"
-    a.informativeText = "清空后不能找回。灵感不受影响。"
-    a.addButton(withTitle: "取消")
-    let clear = a.addButton(withTitle: "清空")
+    a.messageText = L("清空全部 \(clip.items.count) 条剪贴板记录？", "Clear all \(clip.items.count) clipboard \(clip.items.count == 1 ? "item" : "items")?")
+    a.informativeText = L("清空后不能找回。灵感不受影响。", "This can't be undone. Your ideas aren't affected.")
+    a.addButton(withTitle: L("取消", "Cancel"))
+    let clear = a.addButton(withTitle: L("清空", "Clear"))
     clear.hasDestructiveAction = true
     if a.runModal() == .alertSecondButtonReturn { clip.clear() }
 }

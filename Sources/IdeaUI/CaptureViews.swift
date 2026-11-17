@@ -44,7 +44,7 @@ final class CaptureModel {
     var popupOpen = false
 
     var selectedRepo: Repo? { selection.selected.flatMap { id in repos.first { $0.id == id } } }
-    var targetName: String { selectedRepo?.displayName ?? "未归类" }
+    var targetName: String { selectedRepo?.displayName ?? L("未归类", "Unsorted") }
 
     /// D20 面板里新建项目
     var creatingRepo = false
@@ -84,7 +84,7 @@ struct TagLayout: Equatable {
     static let gap: CGFloat = 6
     /// 书写区除文字外占的高度：上下内边距 22 + 22，加输入框与下方留白之间的间距 6
     static let writingChrome: CGFloat = 44 + 6
-    static let maxTagWidth: CGFloat = 128
+    static let maxTagWidth: CGFloat = 180
 
     static let nameFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
     static let cmdFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
@@ -95,8 +95,11 @@ struct TagLayout: Equatable {
         return min(maxTagWidth, 10 + 8 + 5 + nameW + cmdW + 10)
     }
 
+    /// 英文只写 "+N · @"（design §12.3），悬停提示 "Type @ to search projects"
+    static func overflowText(_ n: Int) -> String { L("+\(n) · @ 搜索", "+\(n) · @") }
+
     static func overflowWidth(_ n: Int) -> CGFloat {
-        20 + ceil(("+\(n) · @ 搜索" as NSString).size(withAttributes: [.font: nameFont]).width)
+        20 + ceil((TagLayout.overflowText(n) as NSString).size(withAttributes: [.font: nameFont]).width)
     }
 
     /// 「＋ ⌘N」胶囊宽度
@@ -108,7 +111,7 @@ struct TagLayout: Equatable {
 
     /// 输入胶囊：最小 128，随文字变宽，最宽 260
     static func inputWidth(_ text: String) -> CGFloat {
-        let t = text.isEmpty ? "新项目名" : text
+        let t = text.isEmpty ? L("新项目名", "New project") : text
         let w = ceil((t as NSString).size(withAttributes: [.font: nameFont]).width)
         return min(260, max(128, 10 + 8 + 6 + w + 14))
     }
@@ -170,7 +173,7 @@ struct CapturePanelView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
                 if model.draftRestored {
-                    Text("已恢复未保存的草稿 · ⌘⌫ 清空")
+                    Text(L("已恢复未保存的草稿 · ⌘⌫ 清空", "Draft restored · ⌘⌫ to clear"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Theme.textSecondary)
                 }
@@ -210,8 +213,8 @@ struct CapturePanelView: View {
     @ViewBuilder var footer: some View {
         if let err = model.errorMessage {
             VStack(alignment: .leading, spacing: 4) {
-                Text("没存上：\(err)").font(.system(size: 13, weight: .semibold))
-                Text("⏎ 重试 · ⌘, 换位置").font(.system(size: 12, weight: .medium))
+                Text(L("没存上：\(err)", "Couldn't save — \(err)")).font(.system(size: 13, weight: .semibold))
+                Text(L("⏎ 重试 · ⌘, 换位置", "⏎ Retry · ⌘, Change location")).font(.system(size: 12, weight: .medium))
             }
             .foregroundStyle(Theme.danger)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -221,7 +224,7 @@ struct CapturePanelView: View {
             VStack(alignment: .leading, spacing: 10) {
                 if model.repos.isEmpty && !model.creatingRepo {
                     Button(action: onOpenLibrary) {
-                        Text("还没有项目，全部装进未归类 · 去全部灵感里建一个")
+                        Text(L("还没有项目，全部装进未归类 · 去全部灵感里建一个", "No projects yet — everything goes to Unsorted · Create one in All Ideas"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.textSecondary)
                     }
@@ -240,14 +243,14 @@ struct CapturePanelView: View {
                         if let err = model.createError {
                             Text(err).foregroundStyle(Theme.danger)
                         } else {
-                            Text("⏎ 创建并选中 · Esc 取消").foregroundStyle(Theme.textPrimary)
+                            Text(L("⏎ 创建并选中 · Esc 取消", "⏎ Create & select · Esc Cancel")).foregroundStyle(Theme.textPrimary)
                         }
                         Spacer(minLength: 0)
                     } else {
                         destination
                         Spacer(minLength: 8)
                         Button(action: onSubmit) {
-                            Text("⏎ 保存")
+                            Text(L("⏎ 保存", "⏎ Save"))
                                 .foregroundStyle(Theme.primaryFg)
                                 .padding(.horizontal, 8).frame(height: 22)
                                 .background(Theme.primary, in: RoundedRectangle(cornerRadius: 6))
@@ -267,13 +270,13 @@ struct CapturePanelView: View {
     /// 底行左侧落点：「装进 ■ X」（11 / 600，「装进」次要色）
     var destination: some View {
         HStack(spacing: 5) {
-            Text("装进").foregroundStyle(Theme.textSecondary)
+            Text(L("装进", "Into")).foregroundStyle(Theme.textSecondary)
             if let r = model.selectedRepo {
                 RepoMarker(repo: r, size: 9)
                 Text(r.displayName).lineLimit(1).truncationMode(.tail)
             } else {
                 RepoMarker(repo: Library().inbox, size: 9)
-                Text("未归类")
+                Text(L("未归类", "Unsorted"))
             }
         }
         .font(.system(size: 11, weight: .semibold))
@@ -310,13 +313,14 @@ struct CapturePanelView: View {
             .buttonStyle(.plain)
         case let .overflow(n):
             Button(action: onOverflow) {
-                Text("+\(n) · @ 搜索")
+                Text(TagLayout.overflowText(n))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.textSecondary)
                     .padding(.horizontal, 10).frame(height: 26)
                     .background(Theme.tagCanvas, in: Capsule())
             }
             .buttonStyle(.plain)
+            .help(L("输入 @ 搜索项目", "Type @ to search projects"))
         case .trailing:
             if model.creatingRepo { newRepoInput } else { addChip }
         }
@@ -335,7 +339,7 @@ struct CapturePanelView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help("新建项目 ⌘N")
+        .help(L("新建项目 ⌘N", "New Project ⌘N"))
     }
 
     /// 新建输入胶囊：白底、2pt accent 圈、左侧预览下一个自动分配的颜色
@@ -343,7 +347,7 @@ struct CapturePanelView: View {
         HStack(spacing: 6) {
             RepoMarker(repo: Repo(id: "new", folder: "new", shortcode: "", description: "", created: Date(),
                                   colorIndex: model.nextColorIndex, isInbox: false), size: 9)
-            TextField("新项目名", text: Binding(get: { model.newRepoName }, set: { model.newRepoName = $0; model.createError = nil }))
+            TextField(L("新项目名", "New project"), text: Binding(get: { model.newRepoName }, set: { model.newRepoName = $0; model.createError = nil }))
                 .textFieldStyle(.plain)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
@@ -379,7 +383,7 @@ struct MentionPopupView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if model.popupItems.isEmpty {
-                Text("没有叫 \(model.popupQuery) 的项目")
+                Text(L("没有叫 \(model.popupQuery) 的项目", "No project named “\(model.popupQuery)”"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
@@ -421,8 +425,9 @@ struct HUDView: View {
                 Circle().fill(Theme.primary).frame(width: 20, height: 20)
                 Text("✦").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.primaryFg)
             }
-            Text("已装进").foregroundStyle(Theme.textSecondary)
-            Text("「\(repo?.displayName ?? "未归类")」").foregroundStyle(Theme.textPrimary)
+            Text(L("已装进", "Tucked into")).foregroundStyle(Theme.textSecondary)
+            Text(L("「\(repo?.displayName ?? "未归类")」", repo?.displayName ?? "Unsorted")).foregroundStyle(Theme.textPrimary)
+                .lineLimit(1).truncationMode(.middle)
         }
         .font(.system(size: 13, weight: .semibold))
         .padding(.horizontal, 16)

@@ -46,7 +46,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         }
         capture.onSuspectedConflict = { [weak self] appName in
             guard let self, let hk = HotkeyCenter.shared.current else { return }
-            self.hotkeyWarning = "\(hk.display) 可能和「\(appName)」冲突"
+            self.hotkeyWarning = L("\(hk.display) 可能和「\(appName)」冲突", "\(hk.display) may conflict with “\(appName)”")
         }
 
         if let err = HotkeyCenter.shared.register(Hotkey.load()) {
@@ -77,13 +77,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         let menu = NSMenu()
         warningItem = menu.addItem(withTitle: "", action: #selector(changeHotkeyAction), keyEquivalent: "")
         warningItem.isHidden = true
-        captureItem = menu.addItem(withTitle: "记一条灵感…", action: #selector(captureAction), keyEquivalent: "")
-        clipItem = menu.addItem(withTitle: "剪贴板…", action: #selector(clipboardAction), keyEquivalent: "")
+        captureItem = menu.addItem(withTitle: L("记一条灵感…", "New Idea…"), action: #selector(captureAction), keyEquivalent: "")
+        clipItem = menu.addItem(withTitle: L("剪贴板…", "Clipboard…"), action: #selector(clipboardAction), keyEquivalent: "")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "打开全部灵感…", action: #selector(libraryAction), keyEquivalent: "o")
-        menu.addItem(withTitle: "偏好设置…", action: #selector(settingsAction), keyEquivalent: ",")
+        menu.addItem(withTitle: L("打开全部灵感…", "Open Sparkling"), action: #selector(libraryAction), keyEquivalent: "o")
+        menu.addItem(withTitle: L("偏好设置…", "Settings…"), action: #selector(settingsAction), keyEquivalent: ",")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "退出 Sparkling", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: L("退出 Sparkling", "Quit Sparkling"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         for item in menu.items where item.action != #selector(NSApplication.terminate(_:)) { item.target = self }
         statusItem.menu = menu
     }
@@ -91,11 +91,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     func updateStatusIcon() {
         guard let button = statusItem?.button else { return }
         if let w = hotkeyWarning {
-            let img = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "快捷键有问题")
+            let img = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: L("快捷键有问题", "Shortcut problem"))
             img?.isTemplate = false
             button.image = img?.withSymbolConfiguration(.init(paletteColors: [Theme.ns(0xC4473C)]))
-            button.toolTip = "Sparkling：\(w)，点开菜单修改"
-            warningItem.title = "⚠︎ \(w)，点此修改"
+            button.toolTip = L("Sparkling：\(w)，点开菜单修改", "Sparkling: \(w). Open the menu to fix it.")
+            warningItem.title = L("⚠︎ \(w)，点此修改", "⚠︎ \(w) — Click to Fix")
             warningItem.isHidden = false
         } else {
             let img = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Sparkling")
@@ -113,8 +113,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     }
 
     func updateCaptureItem() {
-        if let hk = HotkeyCenter.shared.current { captureItem.title = "记一条灵感…\t\(hk.display)" } else { captureItem?.title = "记一条灵感…" }
-        if let hk = HotkeyCenter.shared.current(.clipboard) { clipItem?.title = "剪贴板…\t\(hk.display)" } else { clipItem?.title = "剪贴板…" }
+        if let hk = HotkeyCenter.shared.current { captureItem.title = L("记一条灵感…", "New Idea…") + "\t\(hk.display)" } else { captureItem?.title = L("记一条灵感…", "New Idea…") }
+        if let hk = HotkeyCenter.shared.current(.clipboard) { clipItem?.title = L("剪贴板…", "Clipboard…") + "\t\(hk.display)" } else { clipItem?.title = L("剪贴板…", "Clipboard…") }
     }
 
     /// ⌥⇧V：剪贴板面板；记录面板开着时先关掉它
@@ -128,35 +128,35 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         let main = NSMenu()
         let appItem = main.addItem(withTitle: "Sparkling", action: nil, keyEquivalent: "")
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "偏好设置…", action: #selector(settingsAction), keyEquivalent: ",").target = self
+        appMenu.addItem(withTitle: L("偏好设置…", "Settings…"), action: #selector(settingsAction), keyEquivalent: ",").target = self
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "隐藏 Sparkling", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        appMenu.addItem(withTitle: "退出 Sparkling", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: L("隐藏 Sparkling", "Hide Sparkling"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: L("退出 Sparkling", "Quit Sparkling"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
 
-        let fileItem = main.addItem(withTitle: "文件", action: nil, keyEquivalent: "")
-        let fileMenu = NSMenu(title: "文件")
-        fileMenu.addItem(withTitle: "记一条灵感…", action: #selector(captureAction), keyEquivalent: "").target = self
-        fileMenu.addItem(withTitle: "重新读取文件夹", action: #selector(reindexAction), keyEquivalent: "").target = self
+        let fileItem = main.addItem(withTitle: L("文件", "File"), action: nil, keyEquivalent: "")
+        let fileMenu = NSMenu(title: L("文件", "File"))
+        fileMenu.addItem(withTitle: L("记一条灵感…", "New Idea…"), action: #selector(captureAction), keyEquivalent: "").target = self
+        fileMenu.addItem(withTitle: L("重新读取文件夹", "Reload Folder"), action: #selector(reindexAction), keyEquivalent: "").target = self
         fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "关闭窗口", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        fileMenu.addItem(withTitle: L("关闭窗口", "Close Window"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         fileItem.submenu = fileMenu
 
-        let editItem = main.addItem(withTitle: "编辑", action: nil, keyEquivalent: "")
-        let edit = NSMenu(title: "编辑")
-        edit.addItem(withTitle: "撤销", action: Selector(("undo:")), keyEquivalent: "z")
-        let redo = edit.addItem(withTitle: "重做", action: Selector(("redo:")), keyEquivalent: "z")
+        let editItem = main.addItem(withTitle: L("编辑", "Edit"), action: nil, keyEquivalent: "")
+        let edit = NSMenu(title: L("编辑", "Edit"))
+        edit.addItem(withTitle: L("撤销", "Undo"), action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = edit.addItem(withTitle: L("重做", "Redo"), action: Selector(("redo:")), keyEquivalent: "z")
         redo.keyEquivalentModifierMask = [.command, .shift]
         edit.addItem(.separator())
-        edit.addItem(withTitle: "剪切", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        edit.addItem(withTitle: "拷贝", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        edit.addItem(withTitle: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        edit.addItem(withTitle: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        edit.addItem(withTitle: L("剪切", "Cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: L("拷贝", "Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: L("粘贴", "Paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: L("全选", "Select All"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = edit
 
-        let winItem = main.addItem(withTitle: "窗口", action: nil, keyEquivalent: "")
-        let win = NSMenu(title: "窗口")
-        win.addItem(withTitle: "最小化", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m").keyEquivalentModifierMask = [.command, .control]
+        let winItem = main.addItem(withTitle: L("窗口", "Window"), action: nil, keyEquivalent: "")
+        let win = NSMenu(title: L("窗口", "Window"))
+        win.addItem(withTitle: L("最小化", "Minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m").keyEquivalentModifierMask = [.command, .control]
         winItem.submenu = win
         NSApp.windowsMenu = win
         NSApp.mainMenu = main
@@ -170,10 +170,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 
     func alertHotkeyFailure(_ msg: String) {
         let a = NSAlert()
-        a.messageText = "\(msg)，去设置换一个"
-        a.informativeText = "在偏好设置里录一个新的呼出快捷键。也可以从菜单栏图标「记一条灵感…」呼出面板。"
-        a.addButton(withTitle: "打开偏好设置")
-        a.addButton(withTitle: "稍后")
+        a.messageText = L("\(msg)，去设置换一个", "This shortcut is taken. Choose another in Settings.")
+        a.informativeText = L("在偏好设置里录一个新的呼出快捷键。也可以从菜单栏图标「记一条灵感…」呼出面板。", "Record a new capture shortcut in Settings. You can also open the panel from the menu bar icon (New Idea…).")
+        a.addButton(withTitle: L("打开偏好设置", "Open Settings"))
+        a.addButton(withTitle: L("稍后", "Later"))
         NSApp.activate(ignoringOtherApps: true)
         if a.runModal() == .alertFirstButtonReturn { showSettings() }
     }
@@ -214,20 +214,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 
     public func showLibrary() {
         app.reload()
-        present("library", title: "全部灵感", size: NSSize(width: 960, height: 620), minSize: NSSize(width: 720, height: 480), resizable: true) {
+        present("library", title: L("全部灵感", "All Ideas"), size: NSSize(width: 960, height: 620), minSize: NSSize(width: 720, height: 480), resizable: true) {
             LibraryView(openSettings: { [weak self] in self?.showSettings() },
                         saveClip: { [weak self] item in self?.capture.showPrefilled(item, returnToClipboard: false) })
         }
     }
 
     public func showSettings() {
-        present("settings", title: "偏好设置", size: NSSize(width: 540, height: 580), resizable: false) {
+        present("settings", title: L("偏好设置", "Settings"), size: NSSize(width: 600, height: 600), resizable: false) {
             SettingsView(model: settings)
         }
     }
 
     func showOnboarding() {
-        present("onboarding", title: "欢迎使用 Sparkling", size: NSSize(width: 560, height: 520), resizable: false) {
+        present("onboarding", title: L("欢迎使用 Sparkling", "Welcome to Sparkling"), size: NSSize(width: 560, height: 520), resizable: false) {
             OnboardingView(settings: settings, done: { [weak self] in
                 UserDefaults.standard.set(true, forKey: "onboarded")
                 self?.windows["onboarding"]?.close()
