@@ -139,7 +139,8 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
             onOpenSettings: { [weak self] in self?.hide(); self?.openSettings() },
             onAdd: { [weak self] in self?.startCreate() },
             onCreate: { [weak self] in self?.commitCreate() },
-            onCancelCreate: { [weak self] in self?.cancelCreate() }))
+            onCancelCreate: { [weak self] in self?.cancelCreate() },
+            onSubmit: { [weak self] in self?.submit() }))
         // 保留默认 sizingOptions：关掉后 fittingSize 为 0，面板会变成 0×0 看不见
         panel.contentView = hosting
         panel.delegate = self
@@ -223,6 +224,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
     }
 
     public func windowDidBecomeKey(_ notification: Notification) {
+        if model.clip != nil { log.info("capture panel key (clip mode)") }
         let lag = (CFAbsoluteTimeGetCurrent() - HotkeyCenter.shared.lastFire) * 1000
         if lag < 2000 { log.info("panel key after hotkey: \(Int(lag))ms") }
     }
@@ -557,6 +559,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
         draftText = item.kind == .text ? (item.text ?? "") : ""
         draftSelection = TagSelection()
         show()
+        log.info("prefilled from clipboard kind=\(item.kind.rawValue, privacy: .public) key=\(self.panel.isKeyWindow)")
     }
 
     /// Esc：转存模式下回到剪贴板面板

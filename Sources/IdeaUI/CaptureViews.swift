@@ -157,6 +157,8 @@ struct CapturePanelView: View {
     var onAdd: () -> Void = {}
     var onCreate: () -> Void = {}
     var onCancelCreate: () -> Void = {}
+    /// 点「⏎ 保存」也能保存
+    var onSubmit: () -> Void = {}
     @FocusState private var newNameFocused: Bool
 
     /// 书写区里文字最多能占的高度：卡片最高 560 减去内边距、底栏、草稿提示
@@ -244,10 +246,13 @@ struct CapturePanelView: View {
                     } else {
                         destination
                         Spacer(minLength: 8)
-                        Text("⏎ 保存")
-                            .foregroundStyle(Theme.primaryFg)
-                            .padding(.horizontal, 8).frame(height: 22)
-                            .background(Theme.primary, in: RoundedRectangle(cornerRadius: 6))
+                        Button(action: onSubmit) {
+                            Text("⏎ 保存")
+                                .foregroundStyle(Theme.primaryFg)
+                                .padding(.horizontal, 8).frame(height: 22)
+                                .background(Theme.primary, in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .font(.system(size: 11, weight: .semibold))

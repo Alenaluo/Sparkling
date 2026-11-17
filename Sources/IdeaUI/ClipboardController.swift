@@ -188,9 +188,11 @@ public final class ClipboardController: NSObject, NSWindowDelegate, NSTextFieldD
     /// ⌘S：关掉剪贴板面板，同一位置换成记录面板（正文预填）
     func saveSelected() {
         guard let item = selected else { NSSound.beep(); return }
+        // 先让记录面板成为 key，再收起自己：反过来的话，收起的那一刻系统会把键盘焦点还给原 App，
+        // 记录面板虽然显示出来却收不到 ⏎（用户 11-18 反馈「无法保存」）
         switching = true
+        onSaveAsIdea(item)
         hide(animated: false)
         switching = false
-        onSaveAsIdea(item)
     }
 }

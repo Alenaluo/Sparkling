@@ -249,6 +249,10 @@ import Testing
         pb.clearContents(); pb.setData(ClipMonitorTests.png(30, 20), forType: .png); clip.ingest(frontBundleID: nil)
         panel.show()
         panel.saveSelected()
+        // 11-18 用户反馈：记录面板显示了却收不到 ⏎。切换后它必须是 key、剪贴板面板已收起
+        #expect(capture.panel.isKeyWindow)
+        #expect(!panel.isVisible)
+        #expect(capture.panel.firstResponder === capture.textView)
         #expect(capture.model.clip?.kind == .image)
         #expect(capture.textView.string.isEmpty)
         #expect(capture.textView.placeholder == "给这张图写一句…")
