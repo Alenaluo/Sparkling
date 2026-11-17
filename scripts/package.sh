@@ -18,6 +18,7 @@ BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/Sparkl
 rm -rf "$STAGE" && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" dist
 cp "$BIN" "$APP/Contents/MacOS/Sparkling"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 echo "▸ 签名（$SIGN_ID）"
 if [[ "$SIGN_ID" == "-" ]]; then

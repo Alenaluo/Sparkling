@@ -8,6 +8,8 @@
 	<string>Sparkling</string>
 	<key>CFBundleExecutable</key>
 	<string>Sparkling</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>local.sparkling</string>
 	<key>CFBundleName</key>

@@ -14,6 +14,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Sparkling"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 # 签名：SPARKLING_SIGN_ID 指定证书名；否则钥匙串里有「Sparkling Dev」自签证书就用它；都没有则 ad-hoc
 if [[ -n "${SPARKLING_SIGN_ID:-}" ]]; then SIGN_ID=$SPARKLING_SIGN_ID
