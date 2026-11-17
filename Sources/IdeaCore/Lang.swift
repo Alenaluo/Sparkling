@@ -28,7 +28,10 @@ public enum Lang: String, Sendable {
 
     /// 当前界面语言。环境变量 SPARKLING_LANG=zh/en 可覆盖（测试、开发用）
     nonisolated(unsafe) public static var current: Lang = {
-        if let e = ProcessInfo.processInfo.environment["SPARKLING_LANG"], let l = Lang(rawValue: e) { return l }
+        let info = ProcessInfo.processInfo
+        if let e = info.environment["SPARKLING_LANG"], let l = Lang(rawValue: e) { return l }
+        // 单测进程默认中文（原有断言按中文写），不受本机系统语言影响；要测英文设 SPARKLING_LANG=en
+        if info.processName.contains("swiftpm-testing-helper") || info.processName.hasSuffix("xctest") { return .zh }
         return resolve(loadSetting())
     }()
 

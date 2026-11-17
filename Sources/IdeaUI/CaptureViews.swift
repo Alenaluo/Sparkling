@@ -274,6 +274,7 @@ struct CapturePanelView: View {
             if let r = model.selectedRepo {
                 RepoMarker(repo: r, size: 9)
                 Text(r.displayName).lineLimit(1).truncationMode(.tail)
+                    .frame(width: TextWidth.capped(r.displayName, size: 13, weight: .semibold, max: 220), alignment: .leading)
             } else {
                 RepoMarker(repo: Library().inbox, size: 9)
                 Text(L("未归类", "Unsorted"))
@@ -426,8 +427,11 @@ struct HUDView: View {
                 Text("✦").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.primaryFg)
             }
             Text(L("已装进", "Tucked into")).foregroundStyle(Theme.textSecondary)
-            Text(L("「\(repo?.displayName ?? "未归类")」", repo?.displayName ?? "Unsorted")).foregroundStyle(Theme.textPrimary)
+            let name = L("「\(repo?.displayName ?? "未归类")」", repo?.displayName ?? "Unsorted")
+            // HUD 最宽 360（design §12.3）：项目名过长截断
+            Text(name).foregroundStyle(Theme.textPrimary)
                 .lineLimit(1).truncationMode(.middle)
+                .frame(width: TextWidth.capped(name, size: 13, weight: .semibold, max: 360 - 32 - 28 - TextWidth.capped(L("已装进", "Tucked into"), size: 13, weight: .semibold, max: 200) - 16))
         }
         .font(.system(size: 13, weight: .semibold))
         .padding(.horizontal, 16)
@@ -436,5 +440,13 @@ struct HUDView: View {
         .cardShadow()
         .padding(30)
         .fixedSize()
+    }
+}
+
+/// 单行文字宽度（超过 max 截断用）
+enum TextWidth {
+    static func capped(_ s: String, size: CGFloat, weight: NSFont.Weight, max: CGFloat) -> CGFloat {
+        let w = ceil((s as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: size, weight: weight)]).width) + 1
+        return min(w, max)
     }
 }

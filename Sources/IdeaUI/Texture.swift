@@ -65,3 +65,21 @@ struct EmptyCup: View {
         }
     }
 }
+
+/// 空状态插画「女孩低头看空水洼」（design §5.4）：模板图，按 text.secondary 着色；主窗口高 160，剪贴板面板高 120
+struct EmptyGirl: View {
+    var height: CGFloat = 160
+    static let image: NSImage? = {
+        guard let d = Data(base64Encoded: EmptyGirlAsset.png), let img = NSImage(data: d) else { return nil }
+        img.isTemplate = true
+        return img
+    }()
+    var body: some View {
+        if let img = Self.image {
+            Image(nsImage: img).renderingMode(.template).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
+                .foregroundStyle(Theme.textSecondary)
+                .frame(height: height)
+                .accessibilityLabel(L("还空着", "Nothing here yet"))
+        }
+    }
+}

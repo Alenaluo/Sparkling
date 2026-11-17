@@ -436,10 +436,10 @@ struct LibraryView: View {
             }
         } else {
             VStack(spacing: 0) {
-                EmptyCup().frame(width: 64)
+                EmptyGirl(height: 160)
                 Text(currentRepo.isInbox && !showingAll ? L("还空着 ✓", "Nothing here yet ✓") : L("还空着", "Nothing here yet"))
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
-                    .padding(.top, 16)
+                    .padding(.top, 14)
                 if !currentRepo.isInbox || showingAll {
                     Text(emptyHint)
                         .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)

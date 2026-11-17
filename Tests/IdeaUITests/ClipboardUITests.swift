@@ -382,6 +382,9 @@ import Testing
     @Test func staleFadeOutDoesNotHideReshownPanel() async throws {
         let t = try ClipPanelTests()
         let cap = t.capture
+        // 并行的其他 suite 会抢 key；这里只测淡出回调，先断开「失焦即收起」
+        cap.panel.delegate = nil
+        t.panel.panel.delegate = nil
         cap.show(); cap.hide(); cap.show()
         t.panel.show(); t.panel.hide(); t.panel.show()
         try await Task.sleep(for: .milliseconds(400))
@@ -404,5 +407,33 @@ import Testing
                                  characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
         cap.panel.sendEvent(e)
         #expect(t.mdFiles(t.repoDir).count == 1)
+    }
+}
+
+/// 英文界面（product §11.3 E3 E4 E5）。只在 SPARKLING_LANG=en 时跑：
+/// `SPARKLING_LANG=en swift test --filter EnglishUITests`
+@MainActor
+@Suite(.serialized, .enabled(if: Lang.current == .en)) struct EnglishUITests {
+    @Test func strings() throws {
+        let t = try ClipPanelTests()
+        let cap = t.capture
+        cap.show()
+        #expect(cap.model.targetName == "Unsorted")                   // E3 落点
+        #expect(t.app.library.inbox.displayName == "Unsorted")
+        #expect(TagLayout.overflowText(3) == "+3 · @")
+        #expect(Plural.ideas(1) == "1 idea" && Plural.ideas(4) == "4 ideas")   // E4
+        #expect(DateGrouping.title(for: Calendar.current.startOfDay(for: Date())).hasPrefix("Today · "))
+        // E5：英文下保存仍进磁盘上的 Inbox 文件夹，项目文件夹名不变
+        cap.textView.string = "hello"
+        cap.submit()
+        #expect(FileManager.default.fileExists(atPath: t.root.appendingPathComponent("Inbox").path))
+        #expect(t.mdFiles(t.root.appendingPathComponent("Inbox")).count == 1)
+        #expect(FileManager.default.fileExists(atPath: t.root.appendingPathComponent("播放器重构").path))
+        // 剪贴板条目摘要、时间
+        t.pb.clearContents(); t.pb.setData(ClipMonitorTests.png(12, 8), forType: .png); t.clip.ingest(frontBundleID: nil)
+        #expect(t.clip.items[0].summary == "Screenshot · 12 × 8")
+        #expect(ClipTime.label(Date()) == "Just now")
+        #expect(SettingsTab.general.title == "General" && SettingsTab.clipboard.title == "Clipboard")
+        #expect(Palette.milkCoffee.title == "Latte")
     }
 }

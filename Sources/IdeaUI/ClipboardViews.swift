@@ -146,10 +146,12 @@ struct PausedBanner: View {
 
 /// 空状态：手绘剪贴板 +「还空着」
 struct ClipEmptyView: View {
+    /// 剪贴板面板 120，主窗口剪贴板页 160（design §5.4）
+    var height: CGFloat = 120
     var body: some View {
         VStack(spacing: 0) {
-            EmptyClipboardArt().frame(width: 64, height: 76)
-            Spacer().frame(height: 16)
+            EmptyGirl(height: height)
+            Spacer().frame(height: 14)
             Text(L("还空着", "Nothing here yet")).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
             Spacer().frame(height: 6)
             Text(L("复制点什么，就会出现在这里", "Copy something and it'll show up here")).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
@@ -518,7 +520,7 @@ struct ClipboardPage: View {
                 Text(L("筛选会查文字内容和文件名", "Filter checks text and file names")).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
             }
         } else {
-            ClipEmptyView()
+            ClipEmptyView(height: 160)
         }
     }
 

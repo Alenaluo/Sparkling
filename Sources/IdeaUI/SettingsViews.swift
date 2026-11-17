@@ -348,7 +348,7 @@ struct SettingsView: View {
 struct PrimaryButton: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.primaryFg)
-            .padding(.horizontal, 14).frame(height: 32)
+            .padding(.horizontal, 14).frame(minWidth: 72).frame(height: 32)
             .background(Theme.primary.opacity(configuration.isPressed ? 0.8 : 1), in: RoundedRectangle(cornerRadius: 10))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
     }
@@ -357,7 +357,7 @@ struct PrimaryButton: ButtonStyle {
 struct SecondaryButton: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary)
-            .padding(.horizontal, 12).frame(height: 32)
+            .padding(.horizontal, 14).frame(minWidth: 72).frame(height: 32)
             .background(Theme.selected.opacity(configuration.isPressed ? 0.7 : 1), in: RoundedRectangle(cornerRadius: 10))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
     }
@@ -366,7 +366,7 @@ struct SecondaryButton: ButtonStyle {
 struct DangerButton: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.danger)
-            .padding(.horizontal, 12).frame(height: 32)
+            .padding(.horizontal, 14).frame(minWidth: 72).frame(height: 32)
             .background(Theme.dangerBg.opacity(configuration.isPressed ? 0.7 : 1), in: RoundedRectangle(cornerRadius: 10))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
     }
