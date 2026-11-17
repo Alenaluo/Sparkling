@@ -336,9 +336,10 @@ func tempRoot() -> URL {
         let a = repo("a", "结算重构"), b = repo("b", "增长实验")
         #expect(RenamePolicy.decide("结算重构", repo: a, others: [a, b]) == .unchanged)
         #expect(RenamePolicy.decide("  新名字 ", repo: a, others: [a, b]) == .rename("新名字"))
-        #expect(RenamePolicy.decide("   ", repo: a, others: [a, b]) == .rejected("名称不能为空，已恢复原名"))
-        #expect(RenamePolicy.decide("增长实验", repo: a, others: [a, b]) == .rejected("已有项目「增长实验」，已恢复原名"))
-        if case .rejected = RenamePolicy.decide("a/b", repo: a, others: [a, b]) {} else { Issue.record("非法字符应被拒") }
+        #expect(RenamePolicy.decide("   ", repo: a, others: [a, b]) == .rejected("名称不能为空，已恢复为「结算重构」"))
+        #expect(RenamePolicy.decide("增长实验", repo: a, others: [a, b]) == .rejected("已有同名项目「增长实验」，已恢复为「结算重构」"))
+        #expect(RenamePolicy.decide("a/b", repo: a, others: [a, b]) == .rejected("名称不能包含 / 或 :"))
+        #expect(RenamePolicy.decide("a:b", repo: a, others: [a, b]) == .rejected("名称不能包含 / 或 :"))
         if case .rejected = RenamePolicy.decide("未归类", repo: a, others: [a, b]) {} else { Issue.record("保留名应被拒") }
     }
 

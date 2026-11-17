@@ -45,6 +45,12 @@ struct LibraryView: View {
     @State private var renameText = ""
     @State private var renameCancelled = false
     @FocusState private var renameFocused: Bool
+    /// 改名不生效时：圈闪红 150ms；随后在名字下方弹轻提示气泡 2 秒
+    @State private var renameFlash = false
+    @State private var renameInTitle = false
+    @State private var renameBubble: (id: String, inTitle: Bool, text: String)?
+    @State private var bubbleVisible = false
+    @State private var bubbleToken = 0
     /// 退出编辑时发现文件被外部改过
     @State private var conflict: (idea: Idea, text: String)?
     @Environment(\.controlActiveState) private var activeState
@@ -203,6 +209,10 @@ struct LibraryView: View {
         .frame(minHeight: 30)
         .background(on ? Theme.sidebarSelected : .clear, in: RoundedRectangle(cornerRadius: 10))
         .contentShape(Rectangle())
+        .overlay(alignment: .bottomLeading) {
+            renameBubbleView(for: repo.id, inTitle: false).fixedSize().offset(x: 30, y: 30)
+        }
+        .zIndex(renameBubble?.id == repo.id ? 1 : 0)
         .onTapGesture(count: 2) { endEditing(); sidebar = item; startRename(repo) }
         .onTapGesture { endEditing(); sidebar = item }
     }
@@ -221,12 +231,16 @@ struct LibraryView: View {
                             Text(isSearching ? "搜索「\(query)」" : currentRepo.displayName)
                                 .font(.system(size: 22, weight: .bold)).kerning(-0.22).lineSpacing(6)
                                 .foregroundStyle(Theme.textPrimary).lineLimit(1)
-                                .onTapGesture(count: 2) { if !isSearching { startRename(currentRepo) } }
+                                .onTapGesture(count: 2) { if !isSearching { startRename(currentRepo, inTitle: true) } }
                         }
                         Spacer()
                         Text("\(listedIdeas.count) 条").font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.textSecondary)
                     }
                     .frame(minHeight: 28)
+                    .overlay(alignment: .bottomLeading) {
+                        renameBubbleView(for: currentRepo.id, inTitle: true).fixedSize().offset(y: 30)
+                    }
+                    .zIndex(1)
                     .padding(.horizontal, 40).padding(.top, 28).padding(.bottom, 20)
 
                     if groups.isEmpty {
@@ -392,14 +406,15 @@ struct LibraryView: View {
             .onExitCommand { renameCancelled = true; renamingID = nil }
             .padding(.horizontal, 4)
             .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.accent, lineWidth: 2))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(renameFlash ? Theme.danger : Theme.accent, lineWidth: 2))
             .padding(.horizontal, -4)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// 「未归类」「全部灵感」不可改名
-    func startRename(_ repo: Repo) {
+    func startRename(_ repo: Repo, inTitle: Bool = false) {
         guard !repo.isInbox else { return }
+        renameInTitle = inTitle
         endEditing()
         renameText = repo.folder
         renameCancelled = false
@@ -412,12 +427,24 @@ struct LibraryView: View {
 
     /// ⏎ 或点别处确认；空名 / 重名 / 非法 → 恢复原名并轻提示
     func commitRename() {
-        guard let id = renamingID, !renameCancelled, let repo = app.library.repo(id: id) else { renamingID = nil; return }
-        renamingID = nil
+        guard let id = renamingID, !renameCancelled, !renameFlash, let repo = app.library.repo(id: id) else {
+            if !renameFlash { renamingID = nil }
+            return
+        }
         switch RenamePolicy.decide(renameText, repo: repo, others: app.library.repos) {
-        case .unchanged: break
-        case let .rejected(msg): showToast(msg)
+        case .unchanged:
+            renamingID = nil
+        case let .rejected(msg):
+            // 圈变红闪 150ms → 恢复原名 → 名字下方弹轻提示
+            renameFlash = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                renameFlash = false
+                renameText = repo.folder
+                renamingID = nil
+                showRenameBubble(id: id, text: msg)
+            }
         case let .rename(name):
+            renamingID = nil
             do {
                 let updated = try app.store.updateRepo(repo, name: name, shortcode: repo.shortcode, description: repo.description, in: app.library)
                 app.reload()
@@ -426,6 +453,34 @@ struct LibraryView: View {
             } catch {
                 showToast("改名失败：\(error.localizedDescription)，已恢复原名")
             }
+        }
+    }
+
+    func showRenameBubble(id: String, text: String) {
+        bubbleToken += 1
+        let token = bubbleToken
+        renameBubble = (id, renameInTitle, text)
+        bubbleVisible = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            guard token == bubbleToken else { return }
+            withAnimation(.easeOut(duration: 0.25)) { bubbleVisible = false }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { if token == bubbleToken { renameBubble = nil } }
+        }
+    }
+
+    /// 轻提示气泡：白底、高 24、圆角 8、12pt 正文色字、左侧 6pt danger 圆点、弹层投影；不抢焦点、不挡输入
+    @ViewBuilder func renameBubbleView(for id: String, inTitle: Bool) -> some View {
+        if let b = renameBubble, b.id == id, b.inTitle == inTitle {
+            HStack(spacing: 6) {
+                Circle().fill(Theme.danger).frame(width: 6, height: 6)
+                Text(b.text).font(.system(size: 12)).foregroundStyle(Theme.textPrimary).lineLimit(1).fixedSize()
+            }
+            .padding(.horizontal, 10).frame(height: 24)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+            .shadow(color: Theme.shadow, radius: 12, x: 0, y: 6)
+            .opacity(bubbleVisible ? 1 : 0)
+            .allowsHitTesting(false)
+            .alignmentGuide(.top) { d in d[.top] - 6 }
         }
     }
 
