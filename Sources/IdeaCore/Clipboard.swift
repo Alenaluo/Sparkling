@@ -304,6 +304,9 @@ public struct IdeaAttachments: Equatable {
     /// 只认正文开头连续的 `![](路径)`、`[名](file://…)` 行（ClipMarkdown 写出的格式），其余原样当文字
     public static func parse(_ body: String) -> IdeaAttachments {
         var out = IdeaAttachments()
+        // 快速路径：开头不是 ![ 或 [ 就没有附件（列表每行渲染都会调）
+        let lead = body.drop(while: { $0 == " " || $0 == "\n" })
+        guard lead.hasPrefix("![") || lead.hasPrefix("[") else { out.text = body.trimmingCharacters(in: .whitespacesAndNewlines); return out }
         var lines = body.components(separatedBy: "\n")
         var headLines: [String] = []
         while let first = lines.first {
@@ -322,15 +325,23 @@ public struct IdeaAttachments: Equatable {
         return out
     }
 
+    nonisolated(unsafe) static var regexCache: [String: NSRegularExpression] = [:]
+    static func regex(_ p: String) -> NSRegularExpression? {
+        if let r = regexCache[p] { return r }
+        let r = try? NSRegularExpression(pattern: p)
+        regexCache[p] = r
+        return r
+    }
+
     static func match(_ s: String, _ pattern: String) -> String? {
-        guard let re = try? NSRegularExpression(pattern: pattern),
+        guard let re = regex(pattern),
               let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)), m.numberOfRanges > 1,
               let r = Range(m.range(at: 1), in: s) else { return nil }
         return String(s[r])
     }
 
     static func linkMatch(_ s: String) -> (name: String, url: String)? {
-        guard let re = try? NSRegularExpression(pattern: #"^\[((?:\\.|[^\]])*)\]\((file://[^)]+)\)$"#),
+        guard let re = regex(#"^\[((?:\\.|[^\]])*)\]\((file://[^)]+)\)$"#),
               let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
               let n = Range(m.range(at: 1), in: s), let u = Range(m.range(at: 2), in: s) else { return nil }
         let name = String(s[n]).replacingOccurrences(of: "\\]", with: "]").replacingOccurrences(of: "\\[", with: "[")

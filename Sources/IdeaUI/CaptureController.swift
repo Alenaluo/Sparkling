@@ -112,6 +112,8 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
     var anchorTop: CGFloat = 0
     var dismissedMentionAt: Int?
     var hudTimer: Timer?
+    /// 每次 show 加一；旧的淡出回调发现不是自己那一轮就不收起
+    var generation = 0
 
     // v2 ⌘S 存成灵感（design §11.2）
     /// 剪贴板历史（取图片文件用）
@@ -192,6 +194,7 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
         // 卡片中心在屏幕高度 45% 处（以最小高 380 计），之后加高时顶边不动、向下长
         anchorTop = vf.maxY - vf.height * 0.45 + TagLayout.minHeight / 2 + 40
         panel.setFrame(NSRect(x: vf.midX - size.width / 2, y: anchorTop - size.height, width: size.width, height: size.height), display: true)
+        generation += 1
         panel.alphaValue = 0
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(textView)
@@ -211,13 +214,14 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
         }
         closePopup()
         guard panel.isVisible else { return }
+        let gen = generation
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.12
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
             MainActor.assumeIsolated {
-                guard let self, self.panel.alphaValue == 0 else { return }
+                guard let self, self.generation == gen else { return }
                 self.panel.orderOut(nil)
             }
         })
@@ -275,6 +279,8 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
     func toggleTag(_ id: String) {
         model.selection.toggle(id)
         model.errorMessage = nil
+        // 鼠标点 tag 后焦点回到正文，⏎ 仍能保存
+        if panel.firstResponder !== textView { panel.makeFirstResponder(textView) }
     }
 
     func insertAt() {
@@ -559,6 +565,14 @@ public final class CaptureController: NSObject, NSTextViewDelegate, NSWindowDele
         draftText = item.kind == .text ? (item.text ?? "") : ""
         draftSelection = TagSelection()
         show()
+        // 从另一块面板切过来：下一轮再确认一次 key 和正文焦点（11-18 回车没反应）
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.panel.isVisible, self.model.clip != nil else { return }
+                if !self.panel.isKeyWindow { self.panel.makeKeyAndOrderFront(nil); log.info("capture panel re-keyed") }
+                if self.panel.firstResponder !== self.textView { self.panel.makeFirstResponder(self.textView) }
+            }
+        }
         log.info("prefilled from clipboard kind=\(item.kind.rawValue, privacy: .public) key=\(self.panel.isKeyWindow)")
     }
 

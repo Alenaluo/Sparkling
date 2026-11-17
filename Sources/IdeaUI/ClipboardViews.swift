@@ -82,8 +82,9 @@ struct ClipPanelView: View {
                                 .opacity(model.fadingID == item.id ? 0 : 1)
                                 .id(item.id)
                                 .contentShape(Rectangle())
-                                .onTapGesture(count: 2) { onCopy(item) }
-                                .onTapGesture { onSelect(item) }
+                                .onTapGesture {
+                                    if (NSApp.currentEvent?.clickCount ?? 1) >= 2 { onCopy(item) } else { onSelect(item) }
+                                }
                         }
                     }
                     .padding(.horizontal, 4)

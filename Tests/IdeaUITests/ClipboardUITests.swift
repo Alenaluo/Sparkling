@@ -374,3 +374,35 @@ import Testing
         #expect(FileCard.detail("/no/such/file.pdf") == "找不到原文件")
     }
 }
+
+/// 11-18 用户反馈：⌘S 转存后按回车没反应。原因之一：上一轮淡出的回调晚到，把刚显示的面板收掉 / 丢了 key。
+@MainActor
+@Suite(.serialized) struct ClipEnterKeyTests {
+    /// 刚收起又马上显示：旧的淡出回调不能把新显示的面板收掉
+    @Test func staleFadeOutDoesNotHideReshownPanel() async throws {
+        let t = try ClipPanelTests()
+        let cap = t.capture
+        cap.show(); cap.hide(); cap.show()
+        t.panel.show(); t.panel.hide(); t.panel.show()
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(cap.isVisible)
+        #expect(t.panel.isVisible)
+    }
+
+    /// 文字条目 ⌘S 后，真实 ⏎ 键事件能保存；长文字会换行；鼠标点 tag 后焦点仍在正文
+    @Test func enterViaKeyEvent() throws {
+        let t = try ClipPanelTests()
+        t.add("下面的输入框只编辑你写的那句话，保存时自动把图片引用拼回去，所以不会误删。再多写一点让它换行。")
+        t.panel.show()
+        t.panel.saveSelected()
+        let cap = t.capture
+        #expect(cap.textView.contentHeight > IdeaTextView.lineHeight)
+        cap.panel.makeFirstResponder(nil)
+        cap.toggleTag(t.repo.id)
+        #expect(cap.panel.firstResponder === cap.textView)
+        let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: cap.panel.windowNumber, context: nil,
+                                 characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
+        cap.panel.sendEvent(e)
+        #expect(t.mdFiles(t.repoDir).count == 1)
+    }
+}

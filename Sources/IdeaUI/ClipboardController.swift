@@ -32,6 +32,8 @@ public final class ClipboardController: NSObject, NSWindowDelegate, NSTextFieldD
     var onSaveAsIdea: (ClipItem) -> Void = { _ in }
     /// 切到记录面板时不当作「点到别处」
     var switching = false
+    /// 每次 show 加一；旧的淡出回调发现不是自己那一轮就不收起（防止刚显示又被收掉、丢了 key）
+    var generation = 0
 
     public init(clip: ClipboardModel, app: AppModel) {
         self.clip = clip
@@ -71,6 +73,7 @@ public final class ClipboardController: NSObject, NSWindowDelegate, NSTextFieldD
         // 卡片中心在屏幕高度 45% 处（同记录面板）
         let centerY = vf.maxY - vf.height * 0.45
         panel.setFrame(NSRect(x: vf.midX - size.width / 2, y: centerY - size.height / 2, width: size.width, height: size.height), display: true)
+        generation += 1
         panel.alphaValue = 0
         hosting.layoutSubtreeIfNeeded()
         panel.makeKeyAndOrderFront(nil)
@@ -98,13 +101,14 @@ public final class ClipboardController: NSObject, NSWindowDelegate, NSTextFieldD
     public func hide(animated: Bool = true) {
         guard panel.isVisible else { return }
         guard animated else { panel.orderOut(nil); panel.alphaValue = 0; return }
+        let gen = generation
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.12
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
             MainActor.assumeIsolated {
-                guard let self, self.panel.alphaValue == 0 else { return }
+                guard let self, self.generation == gen else { return }
                 self.panel.orderOut(nil)
             }
         })

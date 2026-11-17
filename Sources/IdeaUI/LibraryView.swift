@@ -248,8 +248,10 @@ struct LibraryView: View {
             renameBubbleView(for: repo.id, inTitle: false).fixedSize().offset(x: 30, y: 30)
         }
         .zIndex(renameBubble?.id == repo.id ? 1 : 0)
-        .onTapGesture(count: 2) { endEditing(); sidebar = item; startRename(repo) }
-        .onTapGesture { endEditing(); sidebar = item }
+        // 单击立即切换；不用 onTapGesture(count: 2)，否则每次单击都要等双击超时才响应（11-18 侧栏点项目很慢）
+        .onTapGesture {
+            if isDoubleClick { endEditing(); sidebar = item; startRename(repo) } else { endEditing(); sidebar = item }
+        }
     }
 
     // MARK: 列表（按日期分组，分组标题吸顶）
@@ -353,8 +355,9 @@ struct LibraryView: View {
                 .background((isSelected ? Theme.selected : (hoveredID == idea.id ? Theme.block : .clear)), in: RoundedRectangle(cornerRadius: 12))
                 .contentShape(Rectangle())
                 .onHover { hoveredID = $0 ? idea.id : (hoveredID == idea.id ? nil : hoveredID) }
-                .onTapGesture(count: 2) { selectedID = idea.id; editingID = idea.id }
-                .onTapGesture { endEditing(); selectedID = idea.id; listFocused = true }
+                .onTapGesture {
+                    if isDoubleClick { selectedID = idea.id; editingID = idea.id } else { endEditing(); selectedID = idea.id; listFocused = true }
+                }
                 .contextMenu {
                     Button("编辑  ⏎") { selectedID = idea.id; editingID = idea.id }
                     Button("移动到…  ⌘M") { selectedID = idea.id; movingID = idea.id }
@@ -390,6 +393,9 @@ struct LibraryView: View {
             .foregroundStyle(Theme.textPrimary)
             .lineLimit(3)
     }
+
+    /// 当前点击是否双击的第二下（配合单个 onTapGesture，单击不用等双击超时）
+    var isDoubleClick: Bool { (NSApp.currentEvent?.clickCount ?? 1) >= 2 }
 
     func repoChip(_ repo: Repo) -> some View {
         HStack(spacing: 4) {
