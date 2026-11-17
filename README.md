@@ -36,7 +36,7 @@ SPARKLING_SKIP_ONBOARDING=1 ./scripts/run.sh   # 跳过首次引导
 ./scripts/package.sh                            # 打分发包 dist/Sparkling-<版本>.dmg（通用二进制）
 ```
 
-- 根目录取值：环境变量 `SPARKLING_ROOT` > 偏好设置 > `~/Documents/IdeaNotes`。开发期别用 `~/Documents`：ad-hoc 签名每次构建身份都变，文稿文件夹授权会反复弹。
+- 根目录取值：环境变量 `SPARKLING_ROOT` > 偏好设置 > `~/Documents/Sparkling`（0.1 版默认是 `~/Documents/IdeaNotes`，首次启动自动改名迁移）。开发期别用 `~/Documents`：ad-hoc 签名每次构建身份都变，文稿文件夹授权会反复弹。
 - 签名：`bundle.sh` 优先用 `SPARKLING_SIGN_ID`，其次钥匙串里的自签证书「Sparkling Dev」（本机已建，钥匙串访问 › 证书助理 › 创建证书，类型选代码签名），都没有才 ad-hoc。固定身份才能让文稿授权和开机自启稳定。自签证书显示 `CSSMERR_TP_NOT_TRUSTED` 属正常，不影响本机使用。
 - 日志：`/usr/bin/log stream --predicate 'subsystem == "local.sparkling"' --level debug`（zsh 里 `log` 是内建命令，要写全路径）。包含热键到面板获得焦点的耗时、每次保存的文件名、按键决策。
 

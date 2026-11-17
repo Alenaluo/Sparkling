@@ -23,6 +23,7 @@ public final class AppModel {
     public var rootIsFromEnv: Bool { !(ProcessInfo.processInfo.environment["SPARKLING_ROOT"] ?? "").isEmpty }
 
     public init() {
+        if LibraryStore.migrateLegacyDefaultRoot() { log.info("migrated ~/Documents/IdeaNotes → ~/Documents/Sparkling") }
         store = LibraryStore(root: LibraryStore.resolveRoot())
         reload()
     }

@@ -84,7 +84,33 @@ public final class LibraryStore: @unchecked Sendable {
     }
 
     public static var defaultRoot: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/Sparkling")
+    }
+
+    /// 0.1 版的默认目录，用于一次性迁移
+    public static var legacyDefaultRoot: URL {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/IdeaNotes")
+    }
+
+    /// 默认目录从 ~/Documents/IdeaNotes 改为 ~/Documents/Sparkling：
+    /// 用户没自己设过路径、旧目录在、新目录还不存在时，把旧文件夹改名过去。返回是否迁移了。
+    @discardableResult
+    public static func migrateLegacyDefaultRoot(defaults: UserDefaults = .standard,
+                                                env: [String: String] = ProcessInfo.processInfo.environment,
+                                                legacy: URL = legacyDefaultRoot, target: URL = defaultRoot) -> Bool {
+        let fm = FileManager.default
+        guard (env["SPARKLING_ROOT"] ?? "").isEmpty,
+              (defaults.string(forKey: "rootPath") ?? "").isEmpty,
+              fm.fileExists(atPath: legacy.path),
+              !fm.fileExists(atPath: target.path) else { return false }
+        do {
+            try fm.moveItem(at: legacy, to: target)
+            return true
+        } catch {
+            // 改名失败就继续用旧目录，不丢数据
+            defaults.set(legacy.path, forKey: "rootPath")
+            return false
+        }
     }
 
     var inboxURL: URL { root.appendingPathComponent(Self.inboxFolder) }

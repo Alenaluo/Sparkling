@@ -300,3 +300,31 @@ func tempRoot() -> URL {
         #expect(EditExitPolicy.shouldAutosave("新", onDisk: "原文"))
     }
 }
+
+@Suite struct RootMigrationTests {
+    func setup() -> (UserDefaults, URL, URL) {
+        let base = tempRoot()
+        let d = UserDefaults(suiteName: "sparkling-test-\(UUID().uuidString)")!
+        return (d, base.appendingPathComponent("IdeaNotes"), base.appendingPathComponent("Sparkling"))
+    }
+
+    @Test func migratesWhenOnlyLegacyExists() throws {
+        let (d, old, new) = setup()
+        try FileManager.default.createDirectory(at: old.appendingPathComponent("Inbox"), withIntermediateDirectories: true)
+        #expect(LibraryStore.migrateLegacyDefaultRoot(defaults: d, env: [:], legacy: old, target: new))
+        #expect(FileManager.default.fileExists(atPath: new.appendingPathComponent("Inbox").path))
+        #expect(!FileManager.default.fileExists(atPath: old.path))
+    }
+
+    @Test func skipsWhenUserChoseRootOrTargetExists() throws {
+        let (d, old, new) = setup()
+        try FileManager.default.createDirectory(at: old, withIntermediateDirectories: true)
+        d.set("/somewhere", forKey: "rootPath")
+        #expect(!LibraryStore.migrateLegacyDefaultRoot(defaults: d, env: [:], legacy: old, target: new))
+        d.removeObject(forKey: "rootPath")
+        #expect(!LibraryStore.migrateLegacyDefaultRoot(defaults: d, env: ["SPARKLING_ROOT": "/x"], legacy: old, target: new))
+        try FileManager.default.createDirectory(at: new, withIntermediateDirectories: true)
+        #expect(!LibraryStore.migrateLegacyDefaultRoot(defaults: d, env: [:], legacy: old, target: new))
+        #expect(FileManager.default.fileExists(atPath: old.path))
+    }
+}
