@@ -2,7 +2,7 @@
 
 Mac 菜单栏里的灵感便签。在任何 App 里按 `⌥⇧Space` 呼出面板，写下想法，选一个项目（点 tag、`⌘1–9`、`Tab`，或在正文里打 `@` 补全），`⏎` 就装好了；没选项目的进「未归类」。
 
-每个项目是一个文件夹，每条灵感是一个 Markdown 文件，默认放在 `~/Documents/IdeaNotes`，可以直接用 Obsidian、VS Code 或 Finder 打开、同步、备份。
+每个项目是一个文件夹，每条灵感是一个 Markdown 文件，默认放在 `~/Documents/Sparkling`，可以直接用 Obsidian、VS Code 或 Finder 打开、同步、备份。
 
 ## 下载安装
 
