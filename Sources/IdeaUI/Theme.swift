@@ -2,14 +2,16 @@ import AppKit
 import SwiftUI
 import IdeaCore
 
-/// 3 套可选配色（design.md v1.0 §7.2）。只换颜色和项目标记形状，不做深色模式。
+/// 4 套可选配色（design.md v1.5 §7.2）。只换颜色和项目标记形状，不做深色模式。
+/// 「默认」是新装用户的初始配色；UserDefaults 里已有 palette 的老用户保持原选择。
 public enum Palette: String, CaseIterable, Identifiable, Sendable {
-    case milkCoffee, spotBrown, periwinkle
+    case standard, milkCoffee, spotBrown, periwinkle
     public var id: String { rawValue }
-    public static let `default` = Palette.milkCoffee
+    public static let `default` = Palette.standard
 
     var title: String {
         switch self {
+        case .standard: return L("默认", "Default")
         case .milkCoffee: return L("奶咖", "Latte")
         case .spotBrown: return L("斑点棕", "Cocoa")
         case .periwinkle: return L("长春花", "Periwinkle")
@@ -26,6 +28,8 @@ public enum Palette: String, CaseIterable, Identifiable, Sendable {
         /// 侧栏选中行的项目标记是否改用 primary（斑点棕深底）
         let markerOnSelectedUsesPrimary: Bool
         let shapes: Bool
+        /// 「默认」：项目标记是 8pt 正圆点
+        var dots = false
     }
 
     static let leopard: [(UInt32, UInt32)] = [
@@ -35,6 +39,13 @@ public enum Palette: String, CaseIterable, Identifiable, Sendable {
 
     var tokens: Tokens {
         switch self {
+        case .standard:
+            return Tokens(canvas: 0xFFFFFF, block: 0xF7F7F5, hover: 0xF1F1EF, selected: 0xF1F1EF, sidebarSelected: 0xEAE9E5,
+                          onSidebarSelected: 0x37352F, lineSoft: 0xE9E9E7, textPrimary: 0x37352F, textSecondary: 0x686762,
+                          textTertiary: 0xA5A39E, primary: 0xDDEE7C, primaryFg: 0x37352F, accent: 0xE8692A, tagCanvas: 0xFFFFFF,
+                          repoColors: [(0xB5CB3C, 0xEDF2CE), (0xE8692A, 0xF9D9CA), (0x5E9BD6, 0xD7E6F5), (0xE08A9B, 0xF7E2E6),
+                                       (0xEDB43E, 0xFBEDCF), (0x9A7FD1, 0xE6DFF4), (0x5FAE8C, 0xD7EBE2), (0x9B9A97, 0xE6E6E5)],
+                          markerOnSelectedUsesPrimary: false, shapes: false, dots: true)
         case .milkCoffee:
             return Tokens(canvas: 0xFFFDF9, block: 0xF4EFE7, hover: 0xF4EFE7, selected: 0xF1EBE2, sidebarSelected: 0xE6DCCF,
                           onSidebarSelected: 0x2E2622, lineSoft: 0xE8E1D6, textPrimary: 0x2E2622, textSecondary: 0x6E6259,
@@ -119,6 +130,8 @@ struct RepoMarker: View {
             if repo.isInbox {
                 Circle().strokeBorder(style: StrokeStyle(lineWidth: 1.2, dash: [2, 1.6])).foregroundStyle(Theme.inbox)
                     .frame(width: size, height: size)
+            } else if Theme.t.dots {
+                Circle().fill(color).frame(width: size * 0.8, height: size * 0.8)
             } else if Theme.t.shapes {
                 MarkerShape(kind: max(0, repo.colorIndex) % 8).fill(color).frame(width: size, height: size)
             } else {

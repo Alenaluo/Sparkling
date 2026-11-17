@@ -222,7 +222,8 @@ import Testing
 
 @Suite(.serialized) struct PaletteTests {
     @Test func tokensPerPalette() {
-        #expect(Palette.allCases.count == 3)
+        #expect(Palette.allCases.count == 4)
+        #expect(Palette.default == .standard && Palette.standard.tokens.dots)
         for p in Palette.allCases { #expect(p.tokens.repoColors.count == 8) }
         #expect(Palette.spotBrown.tokens.sidebarSelected == 0x5B3A2B)
         #expect(Palette.spotBrown.tokens.markerOnSelectedUsesPrimary)

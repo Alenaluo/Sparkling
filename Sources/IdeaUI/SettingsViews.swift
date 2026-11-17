@@ -267,14 +267,14 @@ struct SettingsView: View {
         }
     }
 
-    /// 3 张缩略图卡片单选，点选立即生效；选中带 2pt 强调色圈 + 右上角 ✓（design §8）
+    /// 4 张缩略图卡片一行（默认 / 奶咖 / 斑点棕 / 长春花），卡宽约 88、间距 10；选中带 2pt 强调色圈 + 右上角 ✓（design v1.5 §8）
     var palettePicker: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             ForEach(Palette.allCases) { p in
                 let on = app.palette == p
                 VStack(spacing: 4) {
                     PaletteThumb(palette: p)
-                        .frame(width: 112, height: 70)
+                        .frame(width: 88, height: 56)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.lineSoft, lineWidth: 1))
                         .padding(3)
@@ -466,12 +466,12 @@ struct PaletteThumb: View {
                 Spacer(minLength: 0)
             }
             .padding(6)
-            .frame(width: 42)
+            .frame(width: 32)
             .background(Theme.c(t.block))
             VStack(alignment: .leading, spacing: 6) {
-                RoundedRectangle(cornerRadius: 1).fill(Theme.c(t.textPrimary)).frame(width: 26, height: 3)
-                RoundedRectangle(cornerRadius: 1).fill(Theme.c(t.textSecondary)).frame(width: 46, height: 2)
-                RoundedRectangle(cornerRadius: 1).fill(Theme.c(t.textSecondary)).frame(width: 38, height: 2)
+                RoundedRectangle(cornerRadius: 1).fill(Theme.c(t.textPrimary)).frame(width: 22, height: 3)
+                RoundedRectangle(cornerRadius: 1).fill(Theme.c(t.textSecondary)).frame(width: 36, height: 2)
+                RoundedRectangle(cornerRadius: 1).fill(Theme.c(t.textSecondary)).frame(width: 30, height: 2)
                 HStack(spacing: 4) {
                     Capsule().fill(Theme.c(t.primary)).frame(width: 18, height: 8)
                     Capsule().fill(Theme.c(t.accent)).frame(width: 8, height: 8)
@@ -486,7 +486,8 @@ struct PaletteThumb: View {
 
     @ViewBuilder func mark(_ i: Int, _ t: Palette.Tokens, selected: Bool) -> some View {
         let color = Theme.c(selected && t.markerOnSelectedUsesPrimary ? t.primary : t.repoColors[i].0)
-        if t.shapes { MarkerShape(kind: i).fill(color).frame(width: 6, height: 6) }
+        if t.dots { Circle().fill(color).frame(width: 5, height: 5) }
+        else if t.shapes { MarkerShape(kind: i).fill(color).frame(width: 6, height: 6) }
         else { Ellipse().fill(color).frame(width: 6, height: 5).rotationEffect(.degrees(-18)) }
     }
 }
