@@ -1,7 +1,7 @@
-# 输入法手测记录（tech.md §11.5 B）
+# Input method manual test log (tech.md §11.5 B)
 
-每次跑一行。结果填 ✓ / ✗，✗ 附 `/usr/bin/log stream --predicate 'subsystem == "local.sparkling"' --level debug` 片段。
+One row per run. Mark each result ✓ / ✗; attach a snippet of `/usr/bin/log stream --predicate 'subsystem == "local.sparkling"' --level debug` for every ✗.
 
-| 日期 | 输入法及版本 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 备注 |
+| Date | Input method and version | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2026-11-17 | 进程内模拟（IdeaUITests，非真实输入法） | ✓ | ✓ | ✓ | ✓ | — | ✓ | — | — | ✓ | — | — | 只证明 marked text 时不提交；真实输入法待手测 |
+| 2026-11-17 | In-process simulation (IdeaUITests, not a real input method) | ✓ | ✓ | ✓ | ✓ | — | ✓ | — | — | ✓ | — | — | Only proves nothing is committed while there is marked text; real input methods still need a manual test |

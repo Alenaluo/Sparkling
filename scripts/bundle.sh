@@ -1,5 +1,5 @@
 #!/bin/zsh
-# 构建并组装 build/Sparkling.app。用法：scripts/bundle.sh [debug|release] [--install]
+# Build and assemble build/Sparkling.app. Usage: scripts/bundle.sh [debug|release] [--install]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 CONFIG=${1:-release}
@@ -16,7 +16,7 @@ cp "$BIN" "$APP/Contents/MacOS/Sparkling"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
-# 签名：SPARKLING_SIGN_ID 指定证书名；否则钥匙串里有「Sparkling Dev」自签证书就用它；都没有则 ad-hoc
+# Signing: SPARKLING_SIGN_ID names the certificate; otherwise use the self-signed "Sparkling Dev" certificate from the keychain if present; else ad-hoc
 if [[ -n "${SPARKLING_SIGN_ID:-}" ]]; then SIGN_ID=$SPARKLING_SIGN_ID
 elif security find-identity -p codesigning 2>/dev/null | grep -q '"Sparkling Dev"'; then SIGN_ID="Sparkling Dev"
 else SIGN_ID=-; fi

@@ -1,7 +1,7 @@
 #!/bin/zsh
-# 打分发包：通用二进制（Apple 芯片 + Intel）→ ad-hoc 签名 → dist/Sparkling-<版本>.dmg（+ .sha256）
-# 用法：scripts/package.sh
-# 有 Apple Developer ID 时：SPARKLING_SIGN_ID="Developer ID Application: 名字 (TEAMID)" SPARKLING_NOTARY_PROFILE=<notarytool 钥匙串配置名> scripts/package.sh
+# Build a distributable: universal binary (Apple silicon + Intel) → ad-hoc signing → dist/Sparkling-<version>.dmg (+ .sha256)
+# Usage: scripts/package.sh
+# With an Apple Developer ID: SPARKLING_SIGN_ID="Developer ID Application: Your Name (TEAMID)" SPARKLING_NOTARY_PROFILE=<notarytool keychain profile> scripts/package.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -11,7 +11,7 @@ STAGE=build/dist-stage
 APP=$STAGE/Sparkling.app
 DMG=dist/Sparkling-$VERSION.dmg
 
-echo "▸ 构建通用二进制 v$VERSION"
+echo "▸ Building universal binary v$VERSION"
 swift build -c release --product Sparkling --arch arm64 --arch x86_64
 BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/Sparkling"
 
@@ -20,7 +20,7 @@ cp "$BIN" "$APP/Contents/MacOS/Sparkling"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
-echo "▸ 签名（$SIGN_ID）"
+echo "▸ Signing ($SIGN_ID)"
 if [[ "$SIGN_ID" == "-" ]]; then
   codesign --force --deep --sign - "$APP"
 else
@@ -28,13 +28,13 @@ else
 fi
 codesign --verify --strict "$APP"
 
-echo "▸ 生成 DMG"
+echo "▸ Creating DMG"
 ln -s /Applications "$STAGE/Applications"
 rm -f "$DMG"
 hdiutil create -volname "Sparkling $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
 
 if [[ -n "${SPARKLING_NOTARY_PROFILE:-}" && "$SIGN_ID" != "-" ]]; then
-  echo "▸ 公证"
+  echo "▸ Notarizing"
   codesign --sign "$SIGN_ID" --timestamp "$DMG"
   xcrun notarytool submit "$DMG" --keychain-profile "$SPARKLING_NOTARY_PROFILE" --wait
   xcrun stapler staple "$DMG"
