@@ -33,7 +33,7 @@ struct ClipPanelView: View {
         VStack(spacing: 0) {
             if clip.items.isEmpty && !filtering {
                 if !clip.enabled { PausedBanner(onResume: onResume).padding(.horizontal, 16).padding(.top, 16) }
-                ClipEmptyView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                OpticalCenter { ClipEmptyView() }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(alignment: .leading, spacing: 10) {
                     filterBox
@@ -144,6 +144,22 @@ struct PausedBanner: View {
     }
 }
 
+/// 空状态光学居中（design v1.5 §5.4）：水平居中，上空 : 下空 = 38 : 62；放不下时贴顶。
+struct OpticalCenter: Layout {
+    var ratio: CGFloat = 0.38
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let s = subviews.first?.sizeThatFits(.unspecified) ?? .zero
+        return CGSize(width: proposal.width ?? s.width, height: proposal.height ?? s.height)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let v = subviews.first else { return }
+        let s = v.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+        let top = Self.top(container: bounds.height, content: s.height, ratio: ratio)
+        v.place(at: CGPoint(x: bounds.midX, y: bounds.minY + top), anchor: .top, proposal: ProposedViewSize(width: bounds.width, height: s.height))
+    }
+    static func top(container: CGFloat, content: CGFloat, ratio: CGFloat = 0.38) -> CGFloat { max(0, (container - content) * ratio) }
+}
+
 /// 空状态：手绘剪贴板 +「还空着」
 struct ClipEmptyView: View {
     /// 剪贴板面板 120，主窗口剪贴板页 160（design §5.4）
@@ -152,7 +168,7 @@ struct ClipEmptyView: View {
         VStack(spacing: 0) {
             EmptyGirl(height: height)
             Spacer().frame(height: 14)
-            Text(L("还空着", "Nothing here yet")).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+            Text(L("还空着", "Nothing here yet")).font(.system(size: 12)).foregroundStyle(Theme.textPrimary)
             Spacer().frame(height: 6)
             Text(L("复制点什么，就会出现在这里", "Copy something and it'll show up here")).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
         }
@@ -437,7 +453,7 @@ struct ClipboardPage: View {
                             PausedBanner(onResume: { clip.enabled = true }).padding(.horizontal, 40).padding(.bottom, 16)
                         }
                         if shown.isEmpty {
-                            empty.frame(maxWidth: .infinity).frame(height: max(220, geo.size.height - 76))
+                            OpticalCenter { empty }.frame(maxWidth: .infinity).frame(height: max(220, geo.size.height - 76))
                         }
                         ForEach(Array(groups.enumerated()), id: \.element.day) { gi, g in
                             Section {

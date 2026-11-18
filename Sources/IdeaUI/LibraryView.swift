@@ -282,7 +282,7 @@ struct LibraryView: View {
 
                     if groups.isEmpty {
                         // 剩余区域 = 列表区高度 − 顶部 28 − 标题 28 − 20
-                        emptyState.frame(maxWidth: .infinity).frame(height: max(220, geo.size.height - 76))
+                        OpticalCenter { emptyState }.frame(maxWidth: .infinity).frame(height: max(220, geo.size.height - 76))
                     }
                     ForEach(Array(groups.enumerated()), id: \.element.id) { gi, group in
                         Section {
@@ -438,7 +438,7 @@ struct LibraryView: View {
             VStack(spacing: 0) {
                 EmptyGirl(height: 160)
                 Text(currentRepo.isInbox && !showingAll ? L("还空着 ✓", "Nothing here yet ✓") : L("还空着", "Nothing here yet"))
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                    .font(.system(size: 12)).foregroundStyle(Theme.textPrimary)
                     .padding(.top, 14)
                 if !currentRepo.isInbox || showingAll {
                     Text(emptyHint)

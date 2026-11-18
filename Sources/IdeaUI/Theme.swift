@@ -43,8 +43,9 @@ public enum Palette: String, CaseIterable, Identifiable, Sendable {
             return Tokens(canvas: 0xFFFFFF, block: 0xF7F7F5, hover: 0xF1F1EF, selected: 0xF1F1EF, sidebarSelected: 0xEAE9E5,
                           onSidebarSelected: 0x37352F, lineSoft: 0xE9E9E7, textPrimary: 0x37352F, textSecondary: 0x686762,
                           textTertiary: 0xA5A39E, primary: 0xDDEE7C, primaryFg: 0x37352F, accent: 0xE8692A, tagCanvas: 0xFFFFFF,
-                          repoColors: [(0xB5CB3C, 0xEDF2CE), (0xE8692A, 0xF9D9CA), (0x5E9BD6, 0xD7E6F5), (0xE08A9B, 0xF7E2E6),
-                                       (0xEDB43E, 0xFBEDCF), (0x9A7FD1, 0xE6DFF4), (0x5FAE8C, 0xD7EBE2), (0x9B9A97, 0xE6E6E5)],
+                          // design v1.5 §7.2 高饱和撞色：青柠 亮橙 钴蓝 桃粉 明黄 紫罗兰 薄荷 天青
+                          repoColors: [(0xB8D432, 0xEDF4CA), (0xFF6A1F, 0xFFD8C5), (0x2F6BFF, 0xC9D9FF), (0xFF5FA2, 0xFFD5E7),
+                                       (0xFFC21A, 0xFFEFC3), (0x8A5CF6, 0xE1D5FD), (0x1FC8A0, 0xC5F1E6), (0x33B5FF, 0xCAECFF)],
                           markerOnSelectedUsesPrimary: false, shapes: false, dots: true)
         case .milkCoffee:
             return Tokens(canvas: 0xFFFDF9, block: 0xF4EFE7, hover: 0xF4EFE7, selected: 0xF1EBE2, sidebarSelected: 0xE6DCCF,

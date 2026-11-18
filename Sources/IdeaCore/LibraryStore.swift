@@ -145,8 +145,20 @@ public final class LibraryStore: @unchecked Sendable {
             ideas += readIdeas(folder: folder)
         }
         repos.sort { ($0.created, $0.folder) < ($1.created, $1.folder) }
-        // 没有 _repo.md 的仓库按位置给颜色
-        for i in repos.indices where repos[i].colorIndex < 0 { repos[i].colorIndex = i % Self.paletteCount }
+        // 颜色去重：按创建顺序，某色已比别的色用得多就改分下一个最少用的色（修复删项目后按个数取色导致的撞色）；
+        // 没有 _repo.md 的仓库同样在这里分色（只在内存里）。
+        var counts = [Int](repeating: 0, count: Self.paletteCount)
+        var last = -1
+        for i in repos.indices {
+            let c = repos[i].colorIndex
+            if c < 0 || counts[c] > (counts.min() ?? 0) {
+                let n = Self.nextColor(counts: counts, after: last)
+                repos[i].colorIndex = n
+                if c >= 0, !repos[i].id.hasPrefix("folder:") { try? writeRepoFile(repos[i]) }
+            }
+            counts[repos[i].colorIndex] += 1
+            last = repos[i].colorIndex
+        }
         let inbox = Repo(id: "inbox", folder: Self.inboxFolder, shortcode: "", description: "", created: .distantPast, colorIndex: -1, isInbox: true)
         return Library(inbox: inbox, repos: repos, ideas: ideas)
     }
@@ -308,9 +320,26 @@ public final class LibraryStore: @unchecked Sendable {
         let dir = folderURL(trimmed)
         try fm.createDirectory(at: dir, withIntermediateDirectories: false)
         let repo = Repo(id: UUID().uuidString.lowercased(), folder: trimmed, shortcode: sc, description: description,
-                        created: date, colorIndex: library.repos.count % Self.paletteCount, isInbox: false)
+                        created: date, colorIndex: Self.nextColor(for: library.repos), isInbox: false)
         try writeRepoFile(repo)
         return repo
+    }
+
+    /// 下一个颜色：用得最少的色里，从「最近建的项目的色 + 1」起依次找第一个。8 个以内不重复，第 9 个起循环。
+    public static func nextColor(for repos: [Repo]) -> Int {
+        var counts = [Int](repeating: 0, count: paletteCount)
+        for r in repos where r.colorIndex >= 0 { counts[r.colorIndex % paletteCount] += 1 }
+        let last = repos.filter { $0.colorIndex >= 0 }.max { ($0.created, $0.folder) < ($1.created, $1.folder) }?.colorIndex ?? -1
+        return nextColor(counts: counts, after: last)
+    }
+
+    static func nextColor(counts: [Int], after last: Int) -> Int {
+        let m = counts.min() ?? 0
+        for k in 1...paletteCount {
+            let c = (last + k + paletteCount) % paletteCount
+            if counts[c] == m { return c }
+        }
+        return 0
     }
 
     func writeRepoFile(_ repo: Repo) throws {

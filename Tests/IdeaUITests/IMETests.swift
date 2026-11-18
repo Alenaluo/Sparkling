@@ -251,3 +251,12 @@ import Testing
 enum EmptyCupLoads {
     static var ok: Bool { NSImage(data: Data(TextureAssets.emptyCup.replacingOccurrences(of: "currentColor", with: "#6E6259").utf8)) != nil }
 }
+
+@Suite struct OpticalCenterTests {
+    @Test func gapsAre38to62() {
+        let top = OpticalCenter.top(container: 500, content: 200)
+        #expect(abs(top - 114) < 0.01)
+        #expect(abs(top / (500 - 200 - top) - 38.0 / 62.0) < 0.001)
+        #expect(OpticalCenter.top(container: 150, content: 200) == 0)
+    }
+}

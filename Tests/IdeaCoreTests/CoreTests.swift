@@ -357,3 +357,38 @@ func tempRoot() -> URL {
         #expect(lib.count(in: lib.repo(folder: "新名")!) == 2)
     }
 }
+
+/// 项目颜色：删项目后再建不撞色；已撞色的老数据扫描时修复（design v1.5 §7.2）
+@Suite struct RepoColorTests {
+    @Test func noDuplicateAfterDelete() throws {
+        let store = LibraryStore(root: tempRoot())
+        var lib = try store.scan()
+        for n in ["A", "B", "C"] { try store.createRepo(name: n, in: lib); lib = try store.scan() }
+        _ = try store.deleteRepo(lib.repos[0]); lib = try store.scan()
+        for n in ["D", "E"] { try store.createRepo(name: n, in: lib); lib = try store.scan() }
+        let colors = lib.repos.map(\.colorIndex)
+        #expect(Set(colors).count == colors.count)
+        #expect(colors == [1, 2, 3, 4])
+    }
+
+    @Test func scanRepairsDuplicates() throws {
+        let root = tempRoot()
+        let store = LibraryStore(root: root)
+        _ = try store.scan()
+        let names = ["L", "ST", "VOC", "其他"], stored = [1, 3, 3, 3]
+        for (i, n) in names.enumerated() {
+            let dir = root.appendingPathComponent(n)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try "---\nid: r\(i)\nshortcode: s\(i)\ncreated: 2026-11-1\(i)T10:00:00+08:00\ncolor: \(stored[i])\n---\n"
+                .write(to: dir.appendingPathComponent("_repo.md"), atomically: true, encoding: .utf8)
+        }
+        #expect(try store.scan().repos.map(\.colorIndex) == [1, 3, 4, 5])
+        // 写回了文件，再扫一次结果不变
+        #expect(try store.scan().repos.map(\.colorIndex) == [1, 3, 4, 5])
+    }
+
+    @Test func ninthCycles() {
+        let repos = (0..<8).map { Repo(id: "\($0)", folder: "\($0)", shortcode: "", description: "", created: Date(timeIntervalSince1970: Double($0)), colorIndex: $0, isInbox: false) }
+        #expect(LibraryStore.nextColor(for: repos) == 0)
+    }
+}
