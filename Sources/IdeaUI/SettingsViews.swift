@@ -255,8 +255,8 @@ struct SettingsView: View {
             .pickerStyle(.segmented).labelsHidden().frame(width: 260)
             if model.languageNeedsRestart {
                 HStack(spacing: 10) {
-                    Text(L("重启 Sparkling 后生效", "Takes effect after restarting Sparkling."))
-                        .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.c(0x6B5532))
+                    SparklingText(text: L("重启 Sparkling 后生效", "Takes effect after restarting Sparkling."), size: 12, weight: .medium)
+                        .foregroundStyle(Theme.c(0x6B5532))
                     Spacer(minLength: 8)
                     Button(L("立即重启", "Restart Now")) { SettingsModel.relaunch() }.buttonStyle(PrimaryButton())
                 }
@@ -267,14 +267,14 @@ struct SettingsView: View {
         }
     }
 
-    /// 4 张缩略图卡片一行（默认 / 奶咖 / 斑点棕 / 长春花），卡宽约 88、间距 10；选中带 2pt 强调色圈 + 右上角 ✓（design v1.5 §8）
+    /// 5 张缩略图卡片排两行（每行 3 张：默认 / 奶咖 / 斑点棕，长春花 / 柔黄），卡宽 95、间距 12；选中带 2pt 强调色圈 + 右上角 ✓（design v1.5 §8）
     var palettePicker: some View {
-        HStack(spacing: 10) {
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(101), spacing: 12, alignment: .top), count: 3), alignment: .leading, spacing: 12) {
             ForEach(Palette.allCases) { p in
                 let on = app.palette == p
                 VStack(spacing: 4) {
                     PaletteThumb(palette: p)
-                        .frame(width: 88, height: 56)
+                        .frame(width: 95, height: 60)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.lineSoft, lineWidth: 1))
                         .padding(3)
@@ -289,7 +289,11 @@ struct SettingsView: View {
                         .foregroundStyle(on ? Theme.textPrimary : Theme.textSecondary)
                 }
                 .contentShape(Rectangle())
-                .onTapGesture { app.palette = p }
+                .onTapGesture {
+                    // 柔黄的默认底纹是「点点圆环」（design v1.5 §7.2）；之后用户可再换
+                    if p == .butter && app.palette != .butter { app.texture = .ring }
+                    app.palette = p
+                }
                 .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
                 .accessibilityLabel(L("配色：", "Theme: ") + p.title)
             }
@@ -376,7 +380,7 @@ struct DangerButton: ButtonStyle {
 
 /// 首次启动引导（design v1.5 §5.4 §7.0 §12）：两步 ①灵感存在哪 ②按快捷键试记一条。
 /// 没有「建项目」步、没有「跳过」；按钮只有 下一步 / 上一步 / 开始用；角落只留左下 SINCE 2026；
-/// 步骤号是纯数字；第 1 步右侧是低头小女孩插画（empty-girl.png，高 320，right 150、top 150）。
+/// 步骤号是纯数字；右侧不放插画、留白（design v1.5 §5.4，11-18 用户定）。
 enum OnboardingLayout {
     static let size = NSSize(width: 820, height: 560)
     static let leftWidth: CGFloat = 470
@@ -392,12 +396,6 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            if page == 1 {
-                EmptyGirl(height: 320)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.top, 150).padding(.trailing, 150)
-                    .allowsHitTesting(false)
-            }
             VStack(alignment: .leading, spacing: 0) {
                 Text(L("按 \(hk) 随时记下，顺手放进对的项目。", "Press \(hk) to jot anything down — and drop it in the right project."))
                     .font(.system(size: 26, weight: .bold)).kerning(-0.26)

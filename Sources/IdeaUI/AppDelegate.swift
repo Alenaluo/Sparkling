@@ -85,6 +85,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         menu.addItem(.separator())
         menu.addItem(withTitle: L("退出 Sparkling", "Quit Sparkling"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         for item in menu.items where item.action != #selector(NSApplication.terminate(_:)) { item.target = self }
+        brand(menu)
         statusItem.menu = menu
     }
 
@@ -124,6 +125,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         clipPanel.show()
     }
 
+    /// 菜单里的「Sparkling」后接双星（design v1.5 §7.8b）；高亮时星和字一起反白
+    func brand(_ menu: NSMenu) {
+        menu.delegate = self
+        for item in menu.items { SparkleMark.apply(to: item) }
+    }
+
+    public func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
+        for i in menu.items { SparkleMark.apply(to: i, highlighted: i === item) }
+    }
+
     func buildMainMenu() {
         let main = NSMenu()
         let appItem = main.addItem(withTitle: "Sparkling", action: nil, keyEquivalent: "")
@@ -132,6 +143,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: L("隐藏 Sparkling", "Hide Sparkling"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(withTitle: L("退出 Sparkling", "Quit Sparkling"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        brand(appMenu)
         appItem.submenu = appMenu
 
         let fileItem = main.addItem(withTitle: L("文件", "File"), action: nil, keyEquivalent: "")

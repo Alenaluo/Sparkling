@@ -187,6 +187,10 @@ struct CapturePanelView: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 22)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(alignment: .bottomTrailing) {
+                // 柔黄：书写区右下角小芽，距右 16、距底 10，在文字下层、跟着书写区底部走（design v1.5 §7.2）
+                if Theme.t.butter { ButterSprout().padding(.trailing, 16).padding(.bottom, 10) }
+            }
             .background(TexturedBackground(texture: model.texture))
 
             footer
@@ -289,24 +293,27 @@ struct CapturePanelView: View {
         switch item {
         case let .repo(repo, index):
             let isOn = model.selection.selected == repo.id
+            // 柔黄：不显示圆点；选中 = 森林绿实底 + 柔黄字，⌘N 同字色（design v1.5 §7.2）
+            let butter = Theme.t.butter
+            let fg = butter && isOn ? Theme.canvas : Theme.textPrimary
             Button { onTag(repo) } label: {
                 HStack(spacing: 5) {
-                    RepoMarker(repo: repo, size: 9)
+                    if !butter { RepoMarker(repo: repo, size: 9) }
                     Text(repo.displayName)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
+                        .foregroundStyle(fg)
                         .lineLimit(1).truncationMode(.tail)
                     if index < 9 {
                         Text("⌘\(index + 1)")
                             .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(isOn ? Theme.textPrimary : Theme.textSecondary)
+                            .foregroundStyle(isOn ? fg : Theme.textSecondary)
                             .padding(.leading, 1)
                     }
                 }
                 .padding(.horizontal, 10)
                 .frame(height: 26)
                 .frame(maxWidth: TagLayout.maxTagWidth)
-                .background(isOn ? Theme.repoTint(repo) : Theme.tagCanvas, in: Capsule())
+                .background(isOn ? (butter ? Theme.primary : Theme.repoTint(repo)) : Theme.tagCanvas, in: Capsule())
                 .overlay(Capsule().stroke(model.flashID == repo.id ? Theme.accent : .clear, lineWidth: 2))
                 .animation(.easeInOut(duration: 0.12), value: isOn)
                 .animation(.easeInOut(duration: 0.15), value: model.flashID)
@@ -448,5 +455,15 @@ enum TextWidth {
     static func capped(_ s: String, size: CGFloat, weight: NSFont.Weight, max: CGFloat) -> CGFloat {
         let w = ceil((s as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: size, weight: weight)]).width) + 1
         return min(w, max)
+    }
+}
+
+/// 柔黄主题的线稿小芽（80 × 60），不接收点击
+struct ButterSprout: View {
+    static let image = NSImage(data: Data(TextureAssets.butterSprout.utf8))
+    var body: some View {
+        if let img = Self.image {
+            Image(nsImage: img).resizable().frame(width: 80, height: 60).allowsHitTesting(false).accessibilityHidden(true)
+        }
     }
 }

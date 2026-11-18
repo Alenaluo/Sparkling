@@ -222,7 +222,7 @@ import Testing
 
 @Suite(.serialized) struct PaletteTests {
     @Test func tokensPerPalette() {
-        #expect(Palette.allCases.count == 4)
+        #expect(Palette.allCases.count == 5)
         #expect(Palette.default == .standard && Palette.standard.tokens.dots)
         for p in Palette.allCases { #expect(p.tokens.repoColors.count == 8) }
         #expect(Palette.spotBrown.tokens.sidebarSelected == 0x5B3A2B)
@@ -258,5 +258,37 @@ enum EmptyCupLoads {
         #expect(abs(top - 114) < 0.01)
         #expect(abs(top / (500 - 200 - top) - 38.0 / 62.0) < 0.001)
         #expect(OpticalCenter.top(container: 150, content: 200) == 0)
+    }
+}
+
+/// design v1.5：柔黄主题、Sparkling 双星
+@MainActor @Suite(.serialized) struct ButterAndSparkleTests {
+    @Test func butterTokens() {
+        #expect(Palette.allCases.count == 5)
+        let t = Palette.butter.tokens
+        #expect(t.butter && t.dots)
+        #expect(t.canvas == 0xF5DF7E && t.textPrimary == 0x24563A && t.tagCanvas == 0xFDF4CF)
+        #expect(t.repoColors.map(\.0) == [0x24563A, 0xE8692A, 0x2F6BFF, 0xFF5FA2, 0x8A5CF6, 0x12A386, 0xC2412D, 0x1E95E0])
+        #expect(Palette.allCases.filter { $0 != .butter }.allSatisfy { !$0.tokens.butter })
+    }
+
+    @Test func whiteTextureLoads() {
+        for tx in Texture.allCases where tx != .none {
+            #expect(tx.image(colorHex: "#FFFFFF", opacity: 0.375) != nil)
+        }
+        #expect(ButterSprout.image != nil)
+    }
+
+    @Test func sparkleAttributed() {
+        let font = NSFont.systemFont(ofSize: 14)
+        let s = SparkleMark.attributed("Quit Sparkling", font: font, color: .labelColor)
+        #expect(s.string.hasPrefix("Quit Sparkling"))
+        var attachments: [NSTextAttachment] = []
+        s.enumerateAttribute(.attachment, in: NSRange(location: 0, length: s.length)) { v, _, _ in if let a = v as? NSTextAttachment { attachments.append(a) } }
+        #expect(attachments.count == 1)
+        let b = attachments[0].bounds
+        #expect(abs(b.height - 14 * 0.66) < 0.01 && abs(b.width - 14 * 0.74) < 0.01 && abs(b.minY - 0.28) < 0.01)
+        #expect(SparkleMark.attributed("~/Documents/x", font: font, color: .labelColor).length == 13)
+        #expect(SparkleMark.template != nil)
     }
 }

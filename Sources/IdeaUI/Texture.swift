@@ -30,12 +30,14 @@ public enum Texture: String, CaseIterable, Identifiable, Sendable {
 
     nonisolated(unsafe) private static var cache: [String: NSImage] = [:]
 
-    /// 平铺块图片；素材里的 #37352F 换成主题正文色
-    func image(colorHex: String = "#37352F") -> NSImage? {
-        guard let svg else { return nil }
-        let key = rawValue + colorHex
+    /// 平铺块图片；素材里的 #37352F 换成主题正文色；opacity 非空时统一改透明度（柔黄：白色 37.5%）
+    func image(colorHex: String = "#37352F", opacity: Double? = nil) -> NSImage? {
+        guard var svg else { return nil }
+        let key = rawValue + colorHex + (opacity.map { "\($0)" } ?? "")
         if let img = Self.cache[key] { return img }
-        let data = Data(svg.replacingOccurrences(of: "#37352F", with: colorHex).utf8)
+        svg = svg.replacingOccurrences(of: "#37352F", with: colorHex)
+        if let opacity { svg = svg.replacingOccurrences(of: #"opacity="[0-9.]+""#, with: "opacity=\"\(opacity)\"", options: .regularExpression) }
+        let data = Data(svg.utf8)
         guard let img = NSImage(data: data), img.size.width > 0 else { return nil }
         Self.cache[key] = img
         return img
@@ -50,7 +52,7 @@ struct TexturedBackground: View {
     var body: some View {
         ZStack {
             Theme.canvas
-            if let img = texture.image(colorHex: Theme.textPrimaryHex) {
+            if let img = Theme.t.butter ? texture.image(colorHex: "#FFFFFF", opacity: 0.375) : texture.image(colorHex: Theme.textPrimaryHex) {
                 Image(nsImage: img).resizable(resizingMode: .tile)
             }
         }

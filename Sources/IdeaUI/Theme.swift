@@ -2,10 +2,10 @@ import AppKit
 import SwiftUI
 import IdeaCore
 
-/// 4 套可选配色（design.md v1.5 §7.2）。只换颜色和项目标记形状，不做深色模式。
+/// 5 套可选配色（design.md v1.5 §7.2）。只换颜色和项目标记形状，不做深色模式。
 /// 「默认」是新装用户的初始配色；UserDefaults 里已有 palette 的老用户保持原选择。
 public enum Palette: String, CaseIterable, Identifiable, Sendable {
-    case standard, milkCoffee, spotBrown, periwinkle
+    case standard, milkCoffee, spotBrown, periwinkle, butter
     public var id: String { rawValue }
     public static let `default` = Palette.standard
 
@@ -15,6 +15,7 @@ public enum Palette: String, CaseIterable, Identifiable, Sendable {
         case .milkCoffee: return L("奶咖", "Latte")
         case .spotBrown: return L("斑点棕", "Cocoa")
         case .periwinkle: return L("长春花", "Periwinkle")
+        case .butter: return L("柔黄", "Butter")
         }
     }
 
@@ -30,6 +31,8 @@ public enum Palette: String, CaseIterable, Identifiable, Sendable {
         let shapes: Bool
         /// 「默认」：项目标记是 8pt 正圆点
         var dots = false
+        /// 「柔黄」：面板 tag 不显示圆点、选中 tag 森林绿实底；底纹用白色 37.5%；书写区右下角小芽（design v1.5 §7.2）
+        var butter = false
     }
 
     static let leopard: [(UInt32, UInt32)] = [
@@ -64,6 +67,13 @@ public enum Palette: String, CaseIterable, Identifiable, Sendable {
                           repoColors: [(0xC8E65A, 0xF1F8D4), (0x2A47B8, 0xC8CFED), (0x8FA0EE, 0xE2E6FB), (0xEE8FDD, 0xFBE2F6),
                                        (0xD94BC0, 0xF5D0EF), (0x7FD6BC, 0xDEF4EE), (0xF7C948, 0xFDF1CF), (0xF08A5D, 0xFBE1D5)],
                           markerOnSelectedUsesPrimary: false, shapes: true)
+        case .butter:
+            // 项目色没有单独的浅底，选中浅底统一用 bg.selected
+            return Tokens(canvas: 0xF5DF7E, block: 0xF8E79E, hover: 0xFBEDB5, selected: 0xFDF4CF, sidebarSelected: 0x24563A,
+                          onSidebarSelected: 0xF5DF7E, lineSoft: 0xE9CF62, textPrimary: 0x24563A, textSecondary: 0x416944,
+                          textTertiary: 0x8C9A5C, primary: 0x24563A, primaryFg: 0xFDF4CF, accent: 0x24563A, tagCanvas: 0xFDF4CF,
+                          repoColors: [0x24563A, 0xE8692A, 0x2F6BFF, 0xFF5FA2, 0x8A5CF6, 0x12A386, 0xC2412D, 0x1E95E0].map { ($0, 0xFDF4CF) },
+                          markerOnSelectedUsesPrimary: false, shapes: false, dots: true, butter: true)
         }
     }
 
@@ -101,7 +111,7 @@ public enum Theme {
     static let danger = c(0xC4473C)
     static let dangerBg = c(0xF6E7E6)
     static var inbox: Color { c(t.textTertiary) }
-    static var shadow: Color { c(t.textPrimary, 0.12) }
+    static var shadow: Color { c(t.butter ? 0x37352F : t.textPrimary, 0.12) }
 
     static var nsTextPrimary: NSColor { ns(t.textPrimary) }
     static var nsTextSecondary: NSColor { ns(t.textSecondary) }
